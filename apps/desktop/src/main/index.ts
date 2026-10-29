@@ -12,6 +12,7 @@ function createWindow(): void {
     minHeight: 640,
     backgroundColor: '#F5F4F0',
     title: 'Sentinel Exam',
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
@@ -38,18 +39,30 @@ function createWindow(): void {
     });
   });
 
+  mainWindow.webContents.on('did-finish-load', () => {
+    console.log('[Main Process] Renderer successfully loaded bundle');
+  });
+
+  mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription) => {
+    console.error(`[Main Process] Failed to load renderer: ${errorDescription} (${errorCode})`);
+  });
+
   // Load renderer
   const devServerUrl = process.env.VITE_DEV_SERVER_URL;
   if (devServerUrl) {
     mainWindow.loadURL(devServerUrl);
   } else {
-    // In production or compiled build, load static bundle
     const indexPath = path.join(__dirname, '../renderer/index.html');
-    mainWindow.loadFile(indexPath).catch(() => {
-      // Fallback to local dev server if local file is not yet built
+    mainWindow.loadFile(indexPath).catch((err) => {
+      console.warn(`[Main Process] Could not load local file ${indexPath}: ${err.message}. Trying dev server fallback...`);
       mainWindow?.loadURL('http://127.0.0.1:5173');
     });
   }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+    mainWindow?.focus();
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;

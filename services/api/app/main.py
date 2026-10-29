@@ -1,11 +1,17 @@
 from contextlib import asynccontextmanager
+from pathlib import Path
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import init_db, SessionLocal
 from app.seed import seed_database
 from app.routes.health import router as health_router
 from app.routes.exams import router as exams_router
+
+# Path to compiled desktop renderer bundle
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
+RENDERER_DIST = PROJECT_ROOT / "apps" / "desktop" / "dist" / "renderer"
 
 
 @asynccontextmanager
@@ -30,12 +36,14 @@ app = FastAPI(
     redoc_url="/redoc"
 )
 
-# CORS configuration for desktop and local development environments
+# CORS configuration for desktop, web, and local development environments
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",
         "http://127.0.0.1:5173",
+        "http://localhost:8000",
+        "http://127.0.0.1:8000",
         "http://localhost:3000",
         "http://127.0.0.1:3000"
     ],
@@ -45,6 +53,21 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
-# Route registration
+# API Route registration (registered before static files so API takes precedence)
 app.include_router(health_router)
 app.include_router(exams_router)
+
+# Mount renderer static files at root if built, or provide informative status endpoint
+if RENDERER_DIST.exists() and (RENDERER_DIST / "index.html").exists():
+    app.mount("/", StaticFiles(directory=str(RENDERER_DIST), html=True), name="static")
+else:
+    @app.get("/")
+    def root():
+        return {
+            "service": "sentinel-exam-api",
+            "status": "ok",
+            "message": "Sentinel Exam backend is running. Build the frontend or visit /docs for API documentation.",
+            "health": "/health",
+            "exams": "/api/exams",
+            "docs": "/docs"
+        }

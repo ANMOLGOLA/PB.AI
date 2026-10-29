@@ -6,8 +6,18 @@ import { ExamOverview } from './components/ExamOverview';
 import { fetchHealth, fetchExams } from './api/client';
 import { HealthStatus, PublicExam, ConnectionState } from './api/types';
 
+const resolveInitialApiUrl = (): string => {
+  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) {
+    if (window.location.port === '5173') {
+      return 'http://127.0.0.1:8000';
+    }
+    return window.location.origin;
+  }
+  return 'http://127.0.0.1:8000';
+};
+
 export const App: React.FC = () => {
-  const [backendUrl, setBackendUrl] = useState<string>('http://127.0.0.1:8000');
+  const [backendUrl, setBackendUrl] = useState<string>(resolveInitialApiUrl);
   const [platform, setPlatform] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('0.1.0');
   const [sandboxEnabled, setSandboxEnabled] = useState<boolean>(true);
@@ -42,7 +52,8 @@ export const App: React.FC = () => {
         unsubscribe();
       };
     } else {
-      // Browser fallback for development
+      // Browser environment detection
+      setPlatform('Web Browser');
       const handleBlur = () => {
         setIsWindowFocused(false);
         setLastFocusEventTime(Date.now());
@@ -101,7 +112,7 @@ export const App: React.FC = () => {
         <section className="page-intro">
           <h2 className="page-title">Assessment Environment Status</h2>
           <p className="page-description">
-            Sentinel Exam desktop client foundation verified with Chromium sandboxing, strict
+            Sentinel Exam client verified with process isolation, strict
             Content Security Policy, and local FastAPI assessment service integration.
           </p>
         </section>
