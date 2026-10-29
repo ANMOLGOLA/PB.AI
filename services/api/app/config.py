@@ -18,13 +18,13 @@ class Settings:
     # SQLite Database URI
     DB_PATH: Path = Path(os.getenv("SENTINEL_DB_PATH", str(DEFAULT_DB_FILE))).resolve()
 
+    # Groq AI Vision Configuration
+    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
+    GROQ_VISION_MODEL: str = os.getenv("GROQ_VISION_MODEL", "llama-3.2-11b-vision-preview")
+
     # Teacher Authorization Code for integrity lockouts
     TEACHER_UNLOCK_CODE: str = os.getenv("SENTINEL_TEACHER_CODE", "TEACHER-UNLOCK-2026")
     ALLOWED_TEACHER_CODES: list = ["TEACHER-UNLOCK-2026", "ELEV8-2026", "778899"]
-
-    # Groq Multimodal Vision API configuration
-    GROQ_API_KEY: str = os.getenv("GROQ_API_KEY", "")
-    GROQ_VISION_MODEL: str = os.getenv("GROQ_VISION_MODEL", "llama-3.2-11b-vision-preview")
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:

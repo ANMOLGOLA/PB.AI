@@ -35,39 +35,6 @@ export async function fetchExams(baseUrl: string): Promise<PublicExam[]> {
 }
 
 /**
- * Configure or update Groq API Key on the backend.
- */
-export async function setGroqApiKey(
-  baseUrl: string,
-  apiKey: string
-): Promise<{ status: string; message: string; groq_configured: boolean }> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/config/groq-key`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey })
-  });
-  if (!response.ok) throw new Error('Failed to configure Groq API Key');
-  return response.json();
-}
-
-/**
- * Check Groq API configuration status.
- */
-export async function getGroqStatus(
-  baseUrl: string
-): Promise<{ groq_configured: boolean; model: string }> {
-  try {
-    const url = `${baseUrl.replace(/\/$/, '')}/api/config/groq-status`;
-    const response = await fetch(url);
-    if (!response.ok) return { groq_configured: false, model: 'llama-3.2-11b-vision-preview' };
-    return response.json();
-  } catch {
-    return { groq_configured: false, model: 'llama-3.2-11b-vision-preview' };
-  }
-}
-
-/**
  * Initialize a monitored examination session.
  */
 export async function createSession(
@@ -116,6 +83,38 @@ export async function scanPreExamFace(
 }
 
 export const scanPreExamFaceAndEar = scanPreExamFace;
+
+/**
+ * Check whether Groq Vision engine is configured on backend.
+ */
+export async function fetchGroqEngineStatus(baseUrl: string): Promise<{
+  engine: string;
+  model: string;
+  groq_configured: boolean;
+}> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/engine`;
+  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!response.ok) return { engine: 'fallback_local', model: 'llama-3.2-11b-vision-preview', groq_configured: false };
+  return response.json();
+}
+
+/**
+ * Configure Groq API Key on backend.
+ */
+export async function configureGroqEngine(
+  baseUrl: string,
+  apiKey: string,
+  model = 'llama-3.2-11b-vision-preview'
+): Promise<{ configured: boolean; engine: string; message: string }> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/engine/configure`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey, model })
+  });
+  if (!response.ok) throw new Error('Failed to configure Groq engine');
+  return response.json();
+}
 
 /**
  * Unlock a session locked out due to reaching 5 integrity warnings using teacher code.

@@ -1,3 +1,4 @@
+import os
 import uuid
 import json
 from datetime import datetime, timezone
@@ -29,27 +30,32 @@ from app.proctoring import analyze_camera_frame
 router = APIRouter(prefix="/api", tags=["Sessions & Proctoring"])
 
 
-@router.get("/config/groq-status")
-def get_groq_status():
-    """Check if Groq Multimodal Vision API is configured and ready."""
+@router.get("/proctor/engine")
+def get_proctor_engine_status():
+    """Check whether Groq AI Vision engine or local fallback is active."""
+    has_key = bool(settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "").strip())
     return {
-        "groq_configured": bool(settings.GROQ_API_KEY),
-        "model": settings.GROQ_VISION_MODEL
+        "engine": "groq_vision" if has_key else "fallback_local",
+        "model": settings.GROQ_VISION_MODEL,
+        "groq_configured": has_key
     }
 
 
-@router.post("/config/groq-key")
-def configure_groq_key(payload: dict):
-    """Dynamically set or update Groq API key for vision proctoring."""
+@router.post("/proctor/engine/configure")
+def configure_groq_engine(payload: dict):
+    """Dynamically set or update the Groq API key for AI vision proctoring."""
     key = payload.get("api_key", "").strip()
-    if not key:
-        raise HTTPException(status_code=400, detail="API key is required")
-    settings.GROQ_API_KEY = key
+    if key:
+        settings.GROQ_API_KEY = key
+        os.environ["GROQ_API_KEY"] = key
+    model = payload.get("model", "").strip()
+    if model:
+        settings.GROQ_VISION_MODEL = model
     return {
-        "status": "ok",
-        "message": "Groq API Key configured successfully. Vision proctoring is active.",
-        "groq_configured": True,
-        "model": settings.GROQ_VISION_MODEL
+        "configured": bool(settings.GROQ_API_KEY),
+        "engine": "groq_vision" if bool(settings.GROQ_API_KEY) else "fallback_local",
+        "model": settings.GROQ_VISION_MODEL,
+        "message": "Groq AI Vision configuration updated."
     }
 
 

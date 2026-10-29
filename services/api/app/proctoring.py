@@ -1,209 +1,202 @@
 import base64
+import os
 import json
-import logging
 import uuid
 import cv2
 import numpy as np
-from typing import Dict, Any, Optional, Tuple
+from typing import Dict, Any, List, Optional
 from groq import Groq
 from app.config import settings
 
-logger = logging.getLogger(__name__)
-
-# Lightweight Haar fallback when Groq API key is not configured
-face_cascade_path = cv2.data.haarcascades + "haarcascade_frontalface_default.xml"
-face_cascade = cv2.CascadeClassifier(face_cascade_path)
+# Lightweight fallback detector when Groq key is not configured or in offline dev
+import mediapipe as mp
+mp_face_detection = mp.solutions.face_detection
+fallback_detector = mp_face_detection.FaceDetection(
+    model_selection=0,
+    min_detection_confidence=0.35
+)
 
 
 def get_groq_client() -> Optional[Groq]:
-    """Retrieve an initialized Groq client if an API key is available."""
-    api_key = settings.GROQ_API_KEY or ""
+    """Retrieve an active Groq API client if API key is provided."""
+    api_key = settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "").strip()
     if not api_key:
         return None
     try:
         return Groq(api_key=api_key)
     except Exception as exc:
-        logger.warning(f"Failed to initialize Groq client: {exc}")
+        print(f"[Groq AI] Client initialization error: {exc}")
         return None
 
 
-def clean_base64(image_base64: str) -> str:
-    """Strip data URL scheme header if present."""
-    if "," in image_base64:
-        return image_base64.split(",", 1)[1]
-    return image_base64.strip()
-
-
-def analyze_with_groq_vision(
-    current_image_base64: str,
-    reference_image_base64: Optional[str] = None
+def call_groq_vision(
+    image_base64: str,
+    enrolled_ref_base64: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """
-    Submits camera frame(s) to Groq's high-speed multimodal Llama 3.2 Vision API.
-    Performs face detection, gaze verification, Face ID substitution detection,
-    phone detection, and dark sunglasses inspection in a single fast LPU inference.
+    Leverages Groq's LLaMA 3.2 Vision model to analyze webcam assessment frames for:
+      - Face presence & count
+      - Gaze orientation & screen focus
+      - Biometric candidate Face ID comparison (anti-impersonation)
+      - Mobile phone / unauthorized device presence
+      - Restricted dark sunglasses / eyewear
     """
     client = get_groq_client()
     if not client:
         return None
 
-    clean_curr = clean_base64(current_image_base64)
-    clean_ref = clean_base64(reference_image_base64) if reference_image_base64 else None
-
-    # Construct multimodal messages
-    user_content = []
-
-    prompt = (
-        "You are an expert, real-time AI examination proctoring system. "
-        "Analyze the provided examination webcam frame(s) for assessment integrity.\n"
-        "Return a valid JSON object matching this EXACT schema:\n"
-        "{\n"
-        '  "face_detected": boolean (true if any human face is in the frame),\n'
-        '  "face_count": integer (total number of visible human faces),\n'
-        '  "looking_at_screen": boolean (true if candidate eyes/head are oriented towards the computer display),\n'
-        '  "gaze_direction": string ("CENTER", "LOOKING_LEFT", "LOOKING_RIGHT", "LOOKING_UP", "LOOKING_DOWN", or "NO_FACE"),\n'
-        '  "eyewear_detected": boolean (true ONLY if candidate wears dark/tinted sunglasses that conceal eyes; false for clear eyeglasses),\n'
-        '  "phone_detected": boolean (true if a smartphone, mobile device, or foreign electronic object is visible),\n'
-        '  "face_id_match": boolean (if reference enrolled image is provided, is the person in the active frame the EXACT SAME individual? False if a friend or substitute is taking the exam),\n'
-        '  "status": string ("verified", "no_face", "multiple_faces", "face_mismatch", or "phone_detected"),\n'
-        '  "confidence": float (between 0.0 and 1.0),\n'
-        '  "reason": string (brief concise rationale for the proctoring verdict)\n'
-        "}\n"
-    )
-
-    if clean_ref:
-        prompt += (
-            "NOTE: Image 1 is the candidate's enrolled Biometric Face ID reference. "
-            "Image 2 is the live exam proctoring feed. Compare both images strictly: "
-            "if Image 2 shows a different person, friend, or substitute, set face_id_match to false and status to 'face_mismatch'."
-        )
-        user_content.append({"type": "text", "text": prompt})
-        user_content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{clean_ref}"}
-        })
-        user_content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{clean_curr}"}
-        })
-    else:
-        user_content.append({"type": "text", "text": prompt})
-        user_content.append({
-            "type": "image_url",
-            "image_url": {"url": f"data:image/jpeg;base64,{clean_curr}"}
-        })
-
     try:
-        response = client.chat.completions.create(
-            model=settings.GROQ_VISION_MODEL,
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a professional exam proctoring engine. Always output pure, valid JSON."
-                },
-                {
-                    "role": "user",
-                    "content": user_content
-                }
-            ],
-            response_format={"type": "json_object"},
-            temperature=0.05,
-            max_tokens=600
+        clean_img = image_base64.strip()
+        if not clean_img.startswith("data:image/"):
+            clean_img = f"data:image/jpeg;base64,{clean_img}"
+
+        prompt_text = (
+            "You are an exam proctoring AI vision engine. Analyze this student webcam frame. "
+            "Respond strictly in JSON with the exact keys:\n"
+            "{\n"
+            '  "face_detected": true/false,\n'
+            '  "face_count": 1,\n'
+            '  "gaze_direction": "CENTER" | "LOOKING_LEFT" | "LOOKING_RIGHT" | "LOOKING_DOWN" | "LOOKING_UP",\n'
+            '  "looking_at_screen": true/false,\n'
+            '  "face_id_match": true/false,\n'
+            '  "impersonation_detected": false/true,\n'
+            '  "phone_detected": true/false,\n'
+            '  "eyewear_detected": true/false,\n'
+            '  "confidence": 0.95,\n'
+            '  "summary": "Short description of candidate behavior and environment"\n'
+            "}"
         )
 
-        content = response.choices[0].message.content or "{}"
-        data = json.loads(content)
-        return data
+        content_payload: List[Dict[str, Any]] = [
+            {"type": "text", "text": prompt_text},
+            {"type": "image_url", "image_url": {"url": clean_img}}
+        ]
+
+        if enrolled_ref_base64:
+            clean_ref = enrolled_ref_base64.strip()
+            if not clean_ref.startswith("data:image/"):
+                clean_ref = f"data:image/jpeg;base64,{clean_ref}"
+            content_payload.append({
+                "type": "text",
+                "text": "Reference authorized candidate photo. Compare active person with this reference to detect if another person/friend is taking the exam:"
+            })
+            content_payload.append({
+                "type": "image_url",
+                "image_url": {"url": clean_ref}
+            })
+
+        completion = client.chat.completions.create(
+            model=settings.GROQ_VISION_MODEL,
+            messages=[{"role": "user", "content": content_payload}],
+            response_format={"type": "json_object"},
+            temperature=0.1,
+            max_tokens=400
+        )
+
+        content = completion.choices[0].message.content
+        if content:
+            return json.loads(content)
+        return None
     except Exception as exc:
-        logger.error(f"Groq Vision API execution error: {exc}")
+        print(f"[Groq AI Vision] API inference error: {exc}")
         return None
 
 
-def fallback_local_cv_analysis(
+def fallback_analyze(
+    frame: np.ndarray,
+    enrolled_signature: Optional[str] = None
+) -> Dict[str, Any]:
+    """Lightweight local fallback analyzer when Groq API key is not configured."""
+    h, w, _ = frame.shape
+    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    results = fallback_detector.process(rgb_frame)
+
+    bounding_boxes: List[Dict[str, int]] = []
+    gaze_direction = "CENTER"
+    looking_at_screen = True
+    eyes: List[Dict[str, int]] = []
+    face_count = 0
+
+    if results.detections:
+        face_count = len(results.detections)
+        for idx, detection in enumerate(results.detections):
+            bbox_rel = detection.location_data.relative_bounding_box
+            bx = max(0, int(bbox_rel.xmin * w))
+            by = max(0, int(bbox_rel.ymin * h))
+            bw = min(w - bx, int(bbox_rel.width * w))
+            bh = min(h - by, int(bbox_rel.height * h))
+            bounding_boxes.append({"x": bx, "y": by, "width": bw, "height": bh})
+
+            if idx == 0 and len(detection.location_data.relative_keypoints) >= 4:
+                kps = detection.location_data.relative_keypoints
+                r_eye = (kps[0].x, kps[0].y)
+                l_eye = (kps[1].x, kps[1].y)
+                nose = (kps[2].x, kps[2].y)
+                mouth = (kps[3].x, kps[3].y)
+
+                dx_eye = abs(l_eye[0] - r_eye[0])
+                if dx_eye > 1e-4:
+                    eye_center_x = (r_eye[0] + l_eye[0]) / 2.0
+                    yaw_offset = (nose[0] - eye_center_x) / dx_eye
+                    if yaw_offset > 0.38:
+                        gaze_direction, looking_at_screen = "LOOKING_RIGHT", False
+                    elif yaw_offset < -0.38:
+                        gaze_direction, looking_at_screen = "LOOKING_LEFT", False
+
+                eyes = [
+                    {"x": int(r_eye[0] * w), "y": int(r_eye[1] * h), "name": "right_eye"},
+                    {"x": int(l_eye[0] * w), "y": int(l_eye[1] * h), "name": "left_eye"}
+                ]
+
+    status = "verified" if face_count == 1 else "no_face" if face_count == 0 else "multiple_faces"
+    if face_count == 0:
+        looking_at_screen = False
+
+    return {
+        "face_detected": face_count > 0,
+        "face_count": face_count,
+        "confidence": 0.98 if face_count > 0 else 0.95,
+        "status": status,
+        "bounding_boxes": bounding_boxes,
+        "gaze_direction": gaze_direction,
+        "looking_at_screen": looking_at_screen,
+        "eyes": eyes,
+        "eyewear_detected": False,
+        "phone_detected": False,
+        "phone_boxes": [],
+        "face_id_match": True,
+        "face_id_similarity": 1.0,
+        "engine": "fallback_local",
+        "frame_width": w,
+        "frame_height": h
+    }
+
+
+def analyze_camera_frame(
     image_base64: str,
-    enrolled_sig_raw: Optional[str] = None
+    enrolled_signature: Optional[str] = None
 ) -> Dict[str, Any]:
     """
-    Lightweight fallback analyzer used when Groq API key is not configured or offline.
-    Uses standard OpenCV face cascade to ensure test and offline resilience.
+    Unified proctoring frame analyzer.
+    Uses Groq's high-speed LLaMA 3.2 Vision model when configured;
+    falls back cleanly to local inference if Groq key is absent.
     """
+    raw_b64 = image_base64.split(",", 1)[1] if "," in image_base64 else image_base64
     try:
-        raw_b64 = clean_base64(image_base64)
         image_bytes = base64.b64decode(raw_b64)
         np_arr = np.frombuffer(image_bytes, np.uint8)
         frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
-
         if frame is None:
-            return {
-                "face_detected": False,
-                "face_count": 0,
-                "confidence": 0.0,
-                "status": "invalid_frame",
-                "bounding_boxes": [],
-                "gaze_direction": "UNKNOWN",
-                "looking_at_screen": False,
-                "eyes": [],
-                "eyewear_detected": False,
-                "phone_detected": False,
-                "phone_boxes": [],
-                "face_id_match": True,
-                "face_id_similarity": 1.0,
-                "face_signature": None
-            }
-
+            raise ValueError("Corrupt image data")
         h, w, _ = frame.shape
-        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        faces = face_cascade.detectMultiScale(gray, scaleFactor=1.2, minNeighbors=4, minSize=(40, 40))
-
-        face_count = len(faces)
-        bounding_boxes = [{"x": int(x), "y": int(y), "width": int(bw), "height": int(bh)} for (x, y, bw, bh) in faces]
-
-        face_id = f"FID-{uuid.uuid4().hex[:8].upper()}"
-        computed_sig = {
-            "face_id": face_id,
-            "reference_image": raw_b64[:1200]  # Store compact representation
-        }
-
-        if face_count == 0:
-            status = "no_face"
-            looking = False
-            gaze = "NO_FACE"
-        elif face_count == 1:
-            status = "verified"
-            looking = True
-            gaze = "CENTER"
-        else:
-            status = "multiple_faces"
-            looking = True
-            gaze = "CENTER"
-
-        return {
-            "face_detected": face_count > 0,
-            "face_count": face_count,
-            "confidence": 0.95 if face_count > 0 else 0.90,
-            "status": status,
-            "bounding_boxes": bounding_boxes,
-            "gaze_direction": gaze,
-            "looking_at_screen": looking,
-            "eyes": [],
-            "eyewear_detected": False,
-            "phone_detected": False,
-            "phone_boxes": [],
-            "face_id_match": True,
-            "face_id_similarity": 1.0,
-            "face_signature": computed_sig,
-            "frame_width": w,
-            "frame_height": h,
-            "groq_active": False
-        }
     except Exception as exc:
         return {
             "face_detected": False,
             "face_count": 0,
             "confidence": 0.0,
-            "status": f"error: {str(exc)}",
+            "status": "invalid_frame",
             "bounding_boxes": [],
-            "gaze_direction": "ERROR",
+            "gaze_direction": "UNKNOWN",
             "looking_at_screen": False,
             "eyes": [],
             "eyewear_detected": False,
@@ -212,76 +205,81 @@ def fallback_local_cv_analysis(
             "face_id_match": True,
             "face_id_similarity": 1.0,
             "face_signature": None,
-            "groq_active": False
+            "engine": "error"
         }
 
+    # Extract reference image from enrolled_signature if it contains one
+    ref_image = None
+    if enrolled_signature:
+        try:
+            parsed = json.loads(enrolled_signature)
+            if isinstance(parsed, dict) and "image" in parsed:
+                ref_image = parsed["image"]
+            elif isinstance(enrolled_signature, str) and len(enrolled_signature) > 100:
+                ref_image = enrolled_signature
+        except Exception:
+            ref_image = enrolled_signature
 
-def analyze_camera_frame(
-    image_base64: str,
-    enrolled_signature: Optional[str] = None
-) -> Dict[str, Any]:
-    """
-    Primary proctoring endpoint powered by Groq Multimodal Vision (Llama 3.2 Vision).
-    Falls back gracefully to local analysis if GROQ_API_KEY is not configured.
-    """
-    raw_b64 = clean_base64(image_base64)
+    # 1. Primary: Run Groq AI Vision
+    groq_result = call_groq_vision(image_base64, enrolled_ref_base64=ref_image)
 
-    # 1. Attempt Groq Multimodal Vision Analysis
-    if settings.GROQ_API_KEY:
-        ref_b64 = None
-        if enrolled_signature:
-            try:
-                sig_data = json.loads(enrolled_signature) if isinstance(enrolled_signature, str) else enrolled_signature
-                ref_b64 = sig_data.get("image_base64") or sig_data.get("reference_image")
-            except Exception:
-                ref_b64 = None
+    if groq_result:
+        face_count = int(groq_result.get("face_count", 1 if groq_result.get("face_detected", True) else 0))
+        face_id_match = bool(groq_result.get("face_id_match", True))
+        if groq_result.get("impersonation_detected", False):
+            face_id_match = False
 
-        groq_result = analyze_with_groq_vision(raw_b64, reference_image_base64=ref_b64)
-        if groq_result:
-            face_detected = bool(groq_result.get("face_detected", False))
-            face_count = int(groq_result.get("face_count", 1 if face_detected else 0))
-            looking = bool(groq_result.get("looking_at_screen", True))
-            gaze = str(groq_result.get("gaze_direction", "CENTER"))
-            eyewear = bool(groq_result.get("eyewear_detected", False))
-            phone = bool(groq_result.get("phone_detected", False))
-            face_match = bool(groq_result.get("face_id_match", True))
-            status = str(groq_result.get("status", "verified" if face_detected else "no_face"))
-            conf = float(groq_result.get("confidence", 0.98))
+        status = "verified"
+        if face_count == 0:
+            status = "no_face"
+        elif face_count > 1:
+            status = "multiple_faces"
+        elif not face_id_match:
+            status = "face_mismatch"
 
-            # Approximate bounding box for UI reticle
-            boxes = []
-            if face_detected:
-                boxes.append({"x": 160, "y": 90, "width": 320, "height": 300})
+        # Generate standard centered candidate bounding box if face detected
+        bounding_boxes = []
+        if face_count > 0:
+            bw, bh = int(w * 0.45), int(h * 0.55)
+            bx, by = int((w - bw) / 2), int((h - bh) / 2)
+            bounding_boxes.append({"x": bx, "y": by, "width": bw, "height": bh})
 
-            phone_boxes = []
-            if phone:
-                phone_boxes.append({"x": 60, "y": 200, "width": 120, "height": 200})
+        phone_detected = bool(groq_result.get("phone_detected", False))
+        phone_boxes = []
+        if phone_detected:
+            phone_boxes.append({"x": int(w * 0.1), "y": int(h * 0.5), "width": int(w * 0.25), "height": int(h * 0.35)})
 
-            sig_obj = {
+        return {
+            "face_detected": bool(groq_result.get("face_detected", face_count > 0)),
+            "face_count": face_count,
+            "confidence": float(groq_result.get("confidence", 0.95)),
+            "status": status,
+            "bounding_boxes": bounding_boxes,
+            "gaze_direction": groq_result.get("gaze_direction", "CENTER"),
+            "looking_at_screen": bool(groq_result.get("looking_at_screen", True)),
+            "eyes": [
+                {"x": int(w * 0.42), "y": int(h * 0.40), "name": "right_eye"},
+                {"x": int(w * 0.58), "y": int(h * 0.40), "name": "left_eye"}
+            ],
+            "eyewear_detected": bool(groq_result.get("eyewear_detected", False)),
+            "phone_detected": phone_detected,
+            "phone_boxes": phone_boxes,
+            "face_id_match": face_id_match,
+            "face_id_similarity": 0.35 if not face_id_match else 0.98,
+            "face_signature": {
                 "face_id": f"FID-{uuid.uuid4().hex[:8].upper()}",
-                "image_base64": raw_b64
-            }
+                "image": image_base64
+            },
+            "engine": "groq_vision",
+            "summary": groq_result.get("summary", "Groq AI proctoring active"),
+            "frame_width": w,
+            "frame_height": h
+        }
 
-            return {
-                "face_detected": face_detected,
-                "face_count": face_count,
-                "confidence": conf,
-                "status": status,
-                "bounding_boxes": boxes,
-                "gaze_direction": gaze,
-                "looking_at_screen": looking,
-                "eyes": [],
-                "eyewear_detected": eyewear,
-                "phone_detected": phone,
-                "phone_boxes": phone_boxes,
-                "face_id_match": face_match,
-                "face_id_similarity": 0.98 if face_match else 0.25,
-                "face_signature": sig_obj,
-                "frame_width": 640,
-                "frame_height": 480,
-                "groq_active": True,
-                "reason": groq_result.get("reason", "Groq Vision verification")
-            }
-
-    # 2. Local Fallback when GROQ_API_KEY is not configured
-    return fallback_local_cv_analysis(raw_b64, enrolled_sig_raw=enrolled_signature)
+    # 2. Fallback: Clean local inference if Groq key is not present
+    local_res = fallback_analyze(frame, enrolled_signature=enrolled_signature)
+    local_res["face_signature"] = {
+        "face_id": f"FID-{uuid.uuid4().hex[:8].upper()}",
+        "image": image_base64
+    }
+    return local_res

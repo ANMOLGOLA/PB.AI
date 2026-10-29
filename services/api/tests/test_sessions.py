@@ -107,3 +107,15 @@ def test_pre_exam_scan_and_teacher_unlock(client: TestClient, db_session: Sessio
     })
     assert pass_unlock2.status_code == 200
     assert pass_unlock2.json()["unlocked"] is True
+
+    # 6. Test Groq Engine Status & Configuration
+    status_resp = client.get("/api/proctor/engine")
+    assert status_resp.status_code == 200
+    assert "engine" in status_resp.json()
+
+    config_resp = client.post("/api/proctor/engine/configure", json={
+        "api_key": "gsk_test_mock_key_abc",
+        "model": "llama-3.2-11b-vision-preview"
+    })
+    assert config_resp.status_code == 200
+    assert config_resp.json()["configured"] is True
