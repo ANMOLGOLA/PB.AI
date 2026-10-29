@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Header } from './components/Header';
+import { WhereUElevateLanding } from './components/WhereUElevateLanding';
+import { TestPage } from './components/TestPage';
 import { fetchExams, createSession, submitSession, saveAnswer } from './api/client';
 import { PublicExam, CandidateSession } from './api/types';
 
@@ -44,6 +46,45 @@ interface AIEntry {
 }
 
 export const App: React.FC = () => {
+  // Routing State: '/' for Where U Elevate landing, '/test' for PB.AI proctoring platform
+  const [currentRoute, setCurrentRoute] = useState<string>(() => {
+    if (typeof window !== 'undefined') {
+      const p = window.location.pathname;
+      const h = window.location.hash;
+      if (p === '/test' || p.endsWith('/test') || h === '#/test' || h === '#test') {
+        return '/test';
+      }
+    }
+    return '/';
+  });
+
+  const [testViewMode, setTestViewMode] = useState<'placeholder' | 'assessment'>('placeholder');
+
+  const navigate = (to: string) => {
+    setCurrentRoute(to);
+    if (to === '/test') {
+      setTestViewMode('placeholder');
+    }
+    if (typeof window !== 'undefined' && window.history) {
+      window.history.pushState({}, '', to);
+    }
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const p = window.location.pathname;
+      const h = window.location.hash;
+      if (p === '/test' || p.endsWith('/test') || h === '#/test' || h === '#test') {
+        setCurrentRoute('/test');
+      } else {
+        setCurrentRoute('/');
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // Navigation: 0 = Login, 1 = Face ID, 2 = System Check, 3 = Rules, 4 = Exam, 5 = Result
   const [step, setStep] = useState<number>(0);
   const [backendUrl] = useState<string>('http://127.0.0.1:8000');
@@ -364,11 +405,60 @@ export const App: React.FC = () => {
     return `${m}:${s}`;
   };
 
+  if (currentRoute === '/') {
+    return (
+      <>
+        <Header
+          isLanding={true}
+          showSteps={false}
+          onNavigateToTest={() => navigate('/test')}
+          onNavigateHome={() => navigate('/')}
+        />
+        {toastMessage && <div className="toast">{toastMessage}</div>}
+        <WhereUElevateLanding onNavigateToTest={() => navigate('/test')} />
+      </>
+    );
+  }
+
+  if (currentRoute === '/test' && testViewMode === 'placeholder') {
+    return (
+      <>
+        <Header
+          isLanding={false}
+          showSteps={false}
+          onNavigateToTest={() => navigate('/test')}
+          onNavigateHome={() => navigate('/')}
+        />
+        {toastMessage && <div className="toast">{toastMessage}</div>}
+        <TestPage
+          onNavigateHome={() => navigate('/')}
+          onLaunchAssessment={() => setTestViewMode('assessment')}
+        />
+      </>
+    );
+  }
+
   return (
     <>
-      <Header currentStep={step} onStepClick={goToStep} />
+      <Header
+        currentStep={step}
+        onStepClick={goToStep}
+        showSteps={true}
+        onNavigateToTest={() => navigate('/test')}
+        onNavigateHome={() => navigate('/')}
+      />
 
       {toastMessage && <div className="toast">{toastMessage}</div>}
+
+      <div style={{ maxWidth: '1180px', margin: '8px auto 0', padding: '0 16px', display: 'flex', justifyContent: 'flex-end' }}>
+        <button
+          className="btn ghost sm"
+          onClick={() => setTestViewMode('placeholder')}
+          style={{ fontSize: '12px' }}
+        >
+          ← Back to /test Overview
+        </button>
+      </div>
 
       <main className="wrap">
         {/* STEP 0: LOGIN / ONBOARDING */}

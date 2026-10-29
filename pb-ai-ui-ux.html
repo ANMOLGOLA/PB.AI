@@ -1,0 +1,3142 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Where U Elevate - PB.AI Smart Assessment & Proctoring</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #f8fbff;
+      --surface: #ffffff;
+      --card: #ffffff;
+      --ink: #0f172a;
+      --ink-secondary: #475569;
+      --ink-muted: #64748b;
+      --line: #e2e8f0;
+      --line-subtle: #f1f5f9;
+      
+      /* Light Blue Theme Palette (Lighter Airy Sky Blue) */
+      --pri: #0ea5e9;
+      --pri-hover: #0284c7;
+      --pri-soft: #f0f9ff;
+      --pri-subtle: #f8fbff;
+      --pri-border: #bae6fd;
+      
+      /* Status Colors */
+      --ok: #059669;
+      --ok-soft: #ecfdf5;
+      --ok-border: #a7f3d0;
+      
+      --warn: #d97706;
+      --warn-soft: #fffbeb;
+      --warn-border: #fde68a;
+      
+      --bad: #dc2626;
+      --bad-soft: #fef2f2;
+      --bad-border: #fecaca;
+      
+      --radius-sm: 6px;
+      --radius-md: 10px;
+      --radius-lg: 14px;
+      --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.05);
+      --shadow-md: 0 4px 6px -1px rgba(15, 23, 42, 0.07), 0 2px 4px -2px rgba(15, 23, 42, 0.05);
+      --shadow-lg: 0 10px 15px -3px rgba(15, 23, 42, 0.08), 0 4px 6px -4px rgba(15, 23, 42, 0.04);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--ink);
+      font-size: 14px;
+      line-height: 1.5;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* Top Brand Navigation */
+    header.main-header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--line);
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+
+    .brand-wrap {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      text-decoration: none;
+      color: inherit;
+    }
+
+    .brand-logo-icon {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--pri-subtle);
+      border: 1px solid var(--pri-border);
+      border-radius: var(--radius-sm);
+    }
+
+    .brand-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.2;
+    }
+
+    .brand-subtitle {
+      font-size: 11px;
+      font-weight: 500;
+      color: var(--pri);
+      display: flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .nav-links {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .nav-link {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--ink-secondary);
+      text-decoration: none;
+      padding: 6px 10px;
+      border-radius: var(--radius-sm);
+      transition: color 0.15s ease, background-color 0.15s ease;
+    }
+
+    .nav-link:hover {
+      color: var(--pri);
+      background: var(--pri-subtle);
+    }
+
+    .nav-actions {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .role-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: var(--pri-soft);
+      color: var(--pri-hover);
+      border: 1px solid var(--pri-border);
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      padding: 8px 16px;
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      border: 1px solid transparent;
+      transition: all 0.15s ease;
+      text-decoration: none;
+      outline: none;
+    }
+
+    .btn-primary {
+      background: var(--pri);
+      color: #ffffff;
+      border-color: var(--pri);
+    }
+
+    .btn-primary:hover {
+      background: var(--pri-hover);
+      border-color: var(--pri-hover);
+    }
+
+    .btn-secondary {
+      background: var(--surface);
+      color: var(--ink-secondary);
+      border-color: var(--line);
+    }
+
+    .btn-secondary:hover {
+      background: var(--line-subtle);
+      color: var(--ink);
+    }
+
+    .btn-sm {
+      padding: 5px 10px;
+      font-size: 12px;
+      border-radius: var(--radius-sm);
+    }
+
+    .btn-danger {
+      background: var(--bad);
+      color: #ffffff;
+      border-color: var(--bad);
+    }
+
+    .btn-danger:hover {
+      background: #b91c1c;
+    }
+
+    .btn-outline-danger {
+      background: var(--surface);
+      color: var(--bad);
+      border-color: var(--bad-border);
+    }
+
+    .btn-outline-danger:hover {
+      background: var(--bad-soft);
+    }
+
+    .btn-success {
+      background: var(--ok);
+      color: #ffffff;
+      border-color: var(--ok);
+    }
+
+    .btn-success:hover {
+      background: #047857;
+    }
+
+    /* Sub-header Feature Switcher Bar */
+    .feature-nav-bar {
+      background: #ffffff;
+      border-bottom: 1px solid var(--line);
+      padding: 8px 24px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      overflow-x: auto;
+      white-space: nowrap;
+      scrollbar-width: thin;
+    }
+
+    .feature-nav-bar::-webkit-scrollbar {
+      height: 4px;
+    }
+
+    .feature-nav-bar::-webkit-scrollbar-thumb {
+      background: var(--line);
+      border-radius: 4px;
+    }
+
+    .tab-btn {
+      padding: 6px 12px;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-muted);
+      border: 1px solid transparent;
+      border-radius: 6px;
+      background: transparent;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.15s ease;
+    }
+
+    .tab-btn:hover {
+      color: var(--pri);
+      background: var(--pri-subtle);
+    }
+
+    .tab-btn.active {
+      color: var(--pri);
+      background: var(--pri-soft);
+      border-color: var(--pri-border);
+    }
+
+    .tab-btn .badge-num {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: var(--line);
+      color: var(--ink-muted);
+      font-size: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+    }
+
+    .tab-btn.active .badge-num {
+      background: var(--pri);
+      color: #ffffff;
+    }
+
+    /* Main Container */
+    main.main-content {
+      flex: 1;
+      padding: 24px;
+      max-width: 1240px;
+      width: 100%;
+      margin: 0 auto;
+    }
+
+    .view-panel {
+      display: none;
+    }
+
+    .view-panel.active {
+      display: block;
+    }
+
+    /* Card Utilities */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-sm);
+      overflow: hidden;
+      margin-bottom: 20px;
+    }
+
+    .card-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      background: #ffffff;
+    }
+
+    .card-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .card-subtitle {
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-top: 2px;
+    }
+
+    .card-body {
+      padding: 20px;
+    }
+
+    /* Form Fields */
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--ink-secondary);
+      margin-bottom: 6px;
+    }
+
+    .input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .input-field {
+      width: 100%;
+      height: 40px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius-sm);
+      font-size: 13px;
+      color: var(--ink);
+      background: #ffffff;
+      transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      outline: none;
+      font-family: inherit;
+    }
+
+    .input-field:focus {
+      border-color: var(--pri);
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.12);
+    }
+
+    .input-icon-btn {
+      position: absolute;
+      right: 10px;
+      background: none;
+      border: none;
+      color: var(--ink-muted);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+    }
+
+    .input-icon-btn:hover {
+      color: var(--ink);
+    }
+
+    /* Grid Layouts */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .grid-4 {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    @media (max-width: 900px) {
+      .grid-2, .grid-3, .grid-4 {
+        grid-template-columns: 1fr;
+      }
+      .nav-links {
+        display: none;
+      }
+    }
+
+    /* Metric Cards */
+    .stat-card {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-md);
+      padding: 16px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .stat-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      background: var(--pri-soft);
+      color: var(--pri);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .stat-val {
+      font-size: 22px;
+      font-weight: 700;
+      color: var(--ink);
+      line-height: 1.1;
+    }
+
+    .stat-label {
+      font-size: 12px;
+      color: var(--ink-muted);
+      margin-top: 3px;
+    }
+
+    /* Badges */
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 3px 8px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    .badge-ok {
+      background: var(--ok-soft);
+      color: var(--ok);
+      border: 1px solid var(--ok-border);
+    }
+
+    .badge-warn {
+      background: var(--warn-soft);
+      color: var(--warn);
+      border: 1px solid var(--warn-border);
+    }
+
+    .badge-bad {
+      background: var(--bad-soft);
+      color: var(--bad);
+      border: 1px solid var(--bad-border);
+    }
+
+    .badge-pri {
+      background: var(--pri-soft);
+      color: var(--pri);
+      border: 1px solid var(--pri-border);
+    }
+
+    .badge-neutral {
+      background: var(--line-subtle);
+      color: var(--ink-secondary);
+      border: 1px solid var(--line);
+    }
+
+    /* Tables */
+    .table-container {
+      overflow-x: auto;
+    }
+
+    table.data-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+      font-size: 13px;
+    }
+
+    table.data-table th {
+      background: #f8fafc;
+      padding: 10px 16px;
+      font-weight: 600;
+      color: var(--ink-secondary);
+      border-bottom: 1px solid var(--line);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+
+    table.data-table td {
+      padding: 12px 16px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      vertical-align: middle;
+    }
+
+    table.data-table tr:hover td {
+      background: #f8fafc;
+    }
+
+    /* Question Navigation Palette */
+    .palette-grid {
+      display: grid;
+      grid-template-columns: repeat(5, 1fr);
+      gap: 8px;
+    }
+
+    .palette-btn {
+      height: 38px;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 600;
+      border: 1px solid var(--line);
+      background: #ffffff;
+      color: var(--ink-secondary);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.15s ease;
+    }
+
+    .palette-btn:hover {
+      border-color: var(--pri);
+      color: var(--pri);
+    }
+
+    .palette-btn.active {
+      box-shadow: 0 0 0 2px var(--pri);
+    }
+
+    .palette-btn.status-answered {
+      background: var(--ok);
+      color: #ffffff;
+      border-color: var(--ok);
+    }
+
+    .palette-btn.status-review {
+      background: #7c3aed;
+      color: #ffffff;
+      border-color: #7c3aed;
+    }
+
+    .palette-btn.status-review-answered {
+      background: #7c3aed;
+      color: #ffffff;
+      position: relative;
+      border-color: #7c3aed;
+    }
+
+    .palette-btn.status-review-answered::after {
+      content: '';
+      position: absolute;
+      top: 3px;
+      right: 3px;
+      width: 6px;
+      height: 6px;
+      background: #10b981;
+      border-radius: 50%;
+    }
+
+    .palette-btn.status-unanswered {
+      background: #f1f5f9;
+      color: var(--ink-secondary);
+      border-color: var(--line);
+    }
+
+    /* Modal Backdrop */
+    .modal-overlay {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background: rgba(15, 23, 42, 0.45);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      z-index: 100;
+      padding: 16px;
+    }
+
+    .modal-overlay.open {
+      display: flex;
+    }
+
+    .modal-card {
+      background: #ffffff;
+      border-radius: var(--radius-md);
+      box-shadow: var(--shadow-lg);
+      width: 100%;
+      max-width: 520px;
+      overflow: hidden;
+      border: 1px solid var(--line);
+    }
+
+    .modal-header {
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-title {
+      font-size: 15px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+
+    .modal-body {
+      padding: 20px;
+      max-height: 75vh;
+      overflow-y: auto;
+    }
+
+    .modal-footer {
+      padding: 14px 20px;
+      border-top: 1px solid var(--line);
+      background: #f8fafc;
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* Live Webcam Overlay Box */
+    .webcam-container {
+      position: relative;
+      width: 100%;
+      background: #0f172a;
+      border-radius: var(--radius-md);
+      overflow: hidden;
+      aspect-ratio: 4/3;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      border: 2px solid var(--line);
+    }
+
+    .webcam-video {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transform: scaleX(-1);
+    }
+
+    .face-target-guide {
+      position: absolute;
+      width: 180px;
+      height: 240px;
+      border: 2px dashed #38bdf8;
+      border-radius: 50%;
+      pointer-events: none;
+      transition: border-color 0.2s ease;
+    }
+
+    .face-target-guide.matched {
+      border: 3px solid var(--ok);
+      box-shadow: 0 0 15px rgba(5, 150, 105, 0.4);
+    }
+
+    .webcam-overlay-badge {
+      position: absolute;
+      top: 12px;
+      left: 12px;
+      background: rgba(15, 23, 42, 0.75);
+      color: #ffffff;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-pulse {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #10b981;
+    }
+
+    .status-pulse.warning {
+      background: #f59e0b;
+    }
+
+    .status-pulse.danger {
+      background: #ef4444;
+    }
+
+    /* Audio Meter Bar */
+    .audio-meter-bar {
+      height: 8px;
+      background: var(--line);
+      border-radius: 4px;
+      overflow: hidden;
+      width: 100%;
+    }
+
+    .audio-meter-fill {
+      height: 100%;
+      width: 10%;
+      background: var(--ok);
+      transition: width 0.1s ease;
+    }
+
+    /* Toast Container */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 999;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast-item {
+      pointer-events: auto;
+      background: #ffffff;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--pri);
+      padding: 12px 16px;
+      border-radius: var(--radius-sm);
+      box-shadow: var(--shadow-md);
+      font-size: 13px;
+      color: var(--ink);
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      max-width: 360px;
+    }
+
+    .toast-item.toast-bad {
+      border-left-color: var(--bad);
+      background: #fffafa;
+    }
+
+    .toast-item.toast-ok {
+      border-left-color: var(--ok);
+      background: #f0fdf4;
+    }
+
+    .toast-item.toast-warn {
+      border-left-color: var(--warn);
+      background: #fffdf5;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top Main Navigation -->
+  <header class="main-header">
+    <a href="#" class="brand-wrap" onclick="switchTab(0); return false;">
+      <div class="brand-logo-icon">
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="var(--pri)" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+          <path d="M2 17l10 5 10-5"></path>
+          <path d="M2 12l10 5 10-5"></path>
+        </svg>
+      </div>
+      <div>
+        <div class="brand-title">Where U Elevate</div>
+        <div class="brand-subtitle">
+          <span>PB.AI</span>
+          <span>·</span>
+          <span>Smart Assessment & Proctoring</span>
+        </div>
+      </div>
+    </a>
+
+    <nav class="nav-links">
+      <a href="https://whereuelevate.com/drills" target="_blank" class="nav-link">Hackathons</a>
+      <a href="https://whereuelevate.com/jobs" target="_blank" class="nav-link">Jobs</a>
+      <a href="https://whereuelevate.com/internships" target="_blank" class="nav-link">Internships</a>
+      <a href="https://whereuelevate.com/events" target="_blank" class="nav-link">Events & Bootcamps</a>
+    </nav>
+
+    <div class="nav-actions">
+      <div class="role-badge" id="currentRoleBadge">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="7" r="4"></circle>
+          <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+        </svg>
+        <span id="roleLabel">Student Candidate</span>
+      </div>
+      
+      <button class="btn btn-secondary btn-sm" id="roleToggleBtn" onclick="toggleRole()">
+        Switch to Admin
+      </button>
+
+      <button class="btn btn-secondary btn-sm" onclick="openModal('notificationModal')" title="Notifications">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path>
+          <path d="M13.73 21a2 2 0 0 1-3.46 0"></path>
+        </svg>
+        <span class="badge badge-pri" style="padding: 1px 5px; font-size: 10px;">2</span>
+      </button>
+    </div>
+  </header>
+
+  <!-- 12 Feature Navigator Tabs Bar -->
+  <div class="feature-nav-bar" id="featureNavBar">
+    <button class="tab-btn active" onclick="switchTab(0)">
+      <span class="badge-num">1</span> Login Page
+    </button>
+    <button class="tab-btn" onclick="switchTab(1)">
+      <span class="badge-num">2</span> Student Dashboard
+    </button>
+    <button class="tab-btn" onclick="switchTab(2)">
+      <span class="badge-num">3</span> Exam Code Verification
+    </button>
+    <button class="tab-btn" onclick="switchTab(3)">
+      <span class="badge-num">4</span> Facial Biometrics
+    </button>
+    <button class="tab-btn" onclick="switchTab(4)">
+      <span class="badge-num">5</span> System Check
+    </button>
+    <button class="tab-btn" onclick="switchTab(5)">
+      <span class="badge-num">6</span> Examination Interface
+    </button>
+    <button class="tab-btn" onclick="switchTab(6)">
+      <span class="badge-num">7</span> AI Proctoring
+    </button>
+    <button class="tab-btn" onclick="switchTab(7)">
+      <span class="badge-num">8</span> Admin Dashboard
+    </button>
+    <button class="tab-btn" onclick="switchTab(8)">
+      <span class="badge-num">9</span> Live Monitoring
+    </button>
+    <button class="tab-btn" onclick="switchTab(9)">
+      <span class="badge-num">10</span> Alert Management
+    </button>
+    <button class="tab-btn" onclick="switchTab(10)">
+      <span class="badge-num">11</span> Results & Reports
+    </button>
+    <button class="tab-btn" onclick="switchTab(11)">
+      <span class="badge-num">12</span> Profile & Settings
+    </button>
+  </div>
+
+  <!-- Content Container -->
+  <main class="main-content">
+
+    <!-- ========================================== -->
+    <!-- 1. LOGIN PAGE -->
+    <!-- ========================================== -->
+    <section class="view-panel active" id="view-0">
+      <div style="max-width: 440px; margin: 30px auto;">
+        <div class="card">
+          <div class="card-header" style="justify-content: center; text-align: center; flex-direction: column;">
+            <div class="brand-logo-icon" style="width: 44px; height: 44px; margin-bottom: 8px;">
+              <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="var(--pri)" stroke-width="2.2">
+                <path d="M12 2L2 7l10 5 10-5-10-5z"></path>
+                <path d="M2 17l10 5 10-5"></path>
+                <path d="M2 12l10 5 10-5"></path>
+              </svg>
+            </div>
+            <h2 class="card-title" style="font-size: 18px;">Sign in to PB.AI Portal</h2>
+            <p class="card-subtitle">Where U Elevate Assessment and Proctoring Network</p>
+          </div>
+          <div class="card-body">
+            
+            <!-- Login Type Selection -->
+            <div style="display: flex; gap: 8px; margin-bottom: 20px; background: var(--bg); padding: 4px; border-radius: var(--radius-sm); border: 1px solid var(--line);">
+              <button type="button" class="btn btn-sm" id="loginTypeStudent" onclick="setLoginType('student')" style="flex: 1; background: #ffffff; color: var(--pri); font-weight: 700; border-color: var(--line);">
+                Student Candidate
+              </button>
+              <button type="button" class="btn btn-sm" id="loginTypeAdmin" onclick="setLoginType('admin')" style="flex: 1; background: transparent; color: var(--ink-secondary); font-weight: 500; border-color: transparent;">
+                Exam Administrator
+              </button>
+            </div>
+
+            <form id="loginForm" onsubmit="handleLoginSubmit(event)">
+              <div class="form-group">
+                <label class="form-label" id="loginIdentifierLabel">Student ID or Registered Email</label>
+                <div class="input-wrap">
+                  <input type="text" class="input-field" id="loginIdentifier" placeholder="e.g. STU-2026-8841 or anmol@whereuelevate.com" required value="STU-2026-8841">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                  <label class="form-label" style="margin-bottom: 0;">Password</label>
+                  <a href="#" onclick="openModal('forgotPasswordModal'); return false;" style="font-size: 12px; color: var(--pri); text-decoration: none; font-weight: 500;">Forgot password?</a>
+                </div>
+                <div class="input-wrap">
+                  <input type="password" class="input-field" id="loginPassword" placeholder="Enter your secure password" required value="SentinelSecure2026!">
+                  <button type="button" class="input-icon-btn" onclick="togglePasswordVisibility('loginPassword', 'eyeIcon1')" title="Toggle show/hide">
+                    <svg id="eyeIcon1" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path>
+                      <circle cx="12" cy="12" r="3"></circle>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+
+              <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px;">
+                <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--ink-secondary); cursor: pointer;">
+                  <input type="checkbox" checked style="accent-color: var(--pri);"> Remember credentials on this workstation
+                </label>
+              </div>
+
+              <button type="submit" class="btn btn-primary" style="width: 100%; height: 42px; font-size: 14px;">
+                Secure Sign In
+              </button>
+            </form>
+
+            <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--line); text-align: center;">
+              <span style="font-size: 12px; color: var(--ink-muted);">Quick Role Previews:</span>
+              <div style="display: flex; gap: 8px; justify-content: center; margin-top: 8px;">
+                <button class="btn btn-secondary btn-sm" onclick="quickLogin('student')">Login as Student</button>
+                <button class="btn btn-secondary btn-sm" onclick="quickLogin('admin')">Login as Admin</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 2. STUDENT DASHBOARD -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-1">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 700; color: var(--ink);">Student Assessment Dashboard</h1>
+          <p style="font-size: 13px; color: var(--ink-muted);">Welcome, Anmol Sharma (ID: STU-2026-8841) · Where U Elevate Cohort</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary btn-sm" onclick="switchTab(11)">Profile & Settings</button>
+          <button class="btn btn-primary btn-sm" onclick="switchTab(2)">Enter Exam Code</button>
+        </div>
+      </div>
+
+      <!-- Quick Redeem Exam Code Box -->
+      <div class="card" style="background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%); border-color: var(--pri-border);">
+        <div class="card-body" style="display: flex; align-items: center; justify-content: space-between; gap: 20px; flex-wrap: wrap;">
+          <div>
+            <h3 style="font-size: 16px; font-weight: 700; color: var(--ink); margin-bottom: 4px;">Have an Invitation Exam Code?</h3>
+            <p style="font-size: 13px; color: var(--ink-secondary);">Enter the 8-character unique code provided by your recruiter or proctor to begin eligibility verification.</p>
+          </div>
+          <div style="display: flex; gap: 8px; min-width: 320px;">
+            <input type="text" class="input-field" id="quickExamCodeInput" placeholder="e.g. ELEVATE-2026" value="ELEVATE-2026" style="text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em;">
+            <button class="btn btn-primary" onclick="validateQuickCode()">Verify Code</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Student Stats -->
+      <div class="grid-4" style="margin-bottom: 24px;">
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
+              <line x1="16" y1="2" x2="16" y2="6"></line>
+              <line x1="8" y1="2" x2="8" y2="6"></line>
+              <line x1="3" y1="10" x2="21" y2="10"></line>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">2</div>
+            <div class="stat-label">Upcoming Exams</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: var(--ok-soft); color: var(--ok);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+              <polyline points="22 4 12 14.01 9 11.01"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">5</div>
+            <div class="stat-label">Completed Assessments</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: var(--pri-soft); color: var(--pri);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 20v-6M6 20V10M18 20V4"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">91.4%</div>
+            <div class="stat-label">Average Score</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #fdf4ff; color: #a855f7;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">99.8%</div>
+            <div class="stat-label">Integrity Index</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Upcoming Exams & Schedule -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Scheduled Assessment Queue</div>
+            <div class="card-subtitle">Exams ready for biometric verification and system verification</div>
+          </div>
+          <span class="badge badge-pri">Live Intake</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Exam Name & Category</th>
+                <th>Exam Code</th>
+                <th>Schedule Window</th>
+                <th>Duration</th>
+                <th>Proctoring Mode</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Advanced Data Structures & Algorithms Assessment</strong>
+                  <div style="font-size: 11px; color: var(--ink-muted);">Computer Science Core · Technical Round 1</div>
+                </td>
+                <td><code style="background: var(--bg); padding: 2px 6px; border-radius: 4px; font-weight: 600;">ELEVATE-2026</code></td>
+                <td>Today, 17:00 to 20:00 IST</td>
+                <td>30 Minutes</td>
+                <td><span class="badge badge-ok">AI Live Facial + Audio</span></td>
+                <td>
+                  <button class="btn btn-primary btn-sm" onclick="startExamFlow('ELEVATE-2026')">Start Verification</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Full Stack Systems Architecture & Design</strong>
+                  <div style="font-size: 11px; color: var(--ink-muted);">Where U Elevate Engineering Fellowship</div>
+                </td>
+                <td><code style="background: var(--bg); padding: 2px 6px; border-radius: 4px; font-weight: 600;">FSD-ARCH-44</code></td>
+                <td>Tomorrow, 10:00 to 12:00 IST</td>
+                <td>60 Minutes</td>
+                <td><span class="badge badge-pri">AI Proctoring + Lockdown</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" disabled style="opacity: 0.6;">Opens in 18 hrs</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Past Exam History & Results -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Completed Assessments History</div>
+            <div class="card-subtitle">Verified scores and performance transcripts</div>
+          </div>
+          <button class="btn btn-secondary btn-sm" onclick="switchTab(10)">View Detailed Analytics</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Exam Title</th>
+                <th>Completion Date</th>
+                <th>Score</th>
+                <th>Percentile</th>
+                <th>Proctor Status</th>
+                <th>Status</th>
+                <th>Report</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Database Systems & Query Optimization</strong></td>
+                <td>24 Oct 2026</td>
+                <td><strong>94 / 100</strong></td>
+                <td>97.8%</td>
+                <td><span class="badge badge-ok">Verified Clean</span></td>
+                <td><span class="badge badge-ok">Qualified</span></td>
+                <td><button class="btn btn-secondary btn-sm" onclick="showScoreReport('Database Systems', 94)">View PDF</button></td>
+              </tr>
+              <tr>
+                <td><strong>Applied Machine Learning & Python Foundations</strong></td>
+                <td>12 Oct 2026</td>
+                <td><strong>88 / 100</strong></td>
+                <td>92.1%</td>
+                <td><span class="badge badge-ok">Verified Clean</span></td>
+                <td><span class="badge badge-ok">Qualified</span></td>
+                <td><button class="btn btn-secondary btn-sm" onclick="showScoreReport('Applied ML', 88)">View PDF</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 3. EXAM CODE VERIFICATION -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-2">
+      <div style="max-width: 620px; margin: 20px auto;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+                </svg>
+                Exam Code Verification
+              </div>
+              <div class="card-subtitle">Authorize candidate access to proctored test environment</div>
+            </div>
+            <span class="badge badge-neutral">Step 1 of 4</span>
+          </div>
+          <div class="card-body">
+            
+            <div class="form-group">
+              <label class="form-label">Enter Examination Access Code</label>
+              <div style="display: flex; gap: 10px;">
+                <input type="text" class="input-field" id="verifyExamCodeInput" placeholder="e.g. ELEVATE-2026" value="ELEVATE-2026" style="text-transform: uppercase; font-size: 15px; font-weight: 700; letter-spacing: 0.08em;">
+                <button class="btn btn-primary" onclick="performCodeValidation()">Validate Code</button>
+              </div>
+              <small style="color: var(--ink-muted); font-size: 12px; margin-top: 4px; display: block;">Codes are case-insensitive and strictly linked to your candidate registry.</small>
+            </div>
+
+            <!-- Exam Details Card revealed after validation -->
+            <div id="validatedExamDetailsCard" style="border: 1px solid var(--pri-border); background: var(--pri-subtle); border-radius: var(--radius-sm); padding: 18px; margin-top: 20px;">
+              <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                <div>
+                  <span class="badge badge-ok" style="margin-bottom: 6px;">Code Validated & Active</span>
+                  <h3 style="font-size: 16px; font-weight: 700; color: var(--ink);">Advanced Data Structures & Algorithms Assessment</h3>
+                  <p style="font-size: 12px; color: var(--ink-secondary);">Conducted by Where U Elevate Technical Assessment Cell</p>
+                </div>
+                <div style="text-align: right;">
+                  <div style="font-size: 18px; font-weight: 700; color: var(--pri);">30 Mins</div>
+                  <div style="font-size: 11px; color: var(--ink-muted);">Total Time</div>
+                </div>
+              </div>
+
+              <div class="grid-2" style="gap: 12px; font-size: 12px; margin-bottom: 16px; background: #ffffff; padding: 12px; border-radius: var(--radius-sm); border: 1px solid var(--line);">
+                <div>
+                  <span style="color: var(--ink-muted);">Total Questions:</span> <strong>5 Questions</strong>
+                </div>
+                <div>
+                  <span style="color: var(--ink-muted);">Marking Scheme:</span> <strong>+4 correct, -1 negative</strong>
+                </div>
+                <div>
+                  <span style="color: var(--ink-muted);">Candidate Eligibility:</span> <strong style="color: var(--ok);">Verified Eligible</strong>
+                </div>
+                <div>
+                  <span style="color: var(--ink-muted);">Security Standard:</span> <strong>Strict Kiosk + AI Vision</strong>
+                </div>
+              </div>
+
+              <div style="display: flex; justify-content: space-between; align-items: center;">
+                <span style="font-size: 12px; color: var(--ink-muted);">Candidate: Anmol Sharma (STU-2026-8841)</span>
+                <button class="btn btn-primary" onclick="switchTab(3)">
+                  Proceed to Facial Biometrics
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="5" y1="12" x2="19" y2="12"></line>
+                    <polyline points="12 5 19 12 12 19"></polyline>
+                  </svg>
+                </button>
+              </div>
+
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 4. FACIAL BIOMETRIC VERIFICATION -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-3">
+      <div style="max-width: 780px; margin: 20px auto;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M9 3H5a2 2 0 0 0-2 2v4m18-6h-4a2 2 0 0 0-2 2v4m0 12h4a2 2 0 0 0 2-2v-4m-18 6h4a2 2 0 0 0 2-2v-4"></path>
+                </svg>
+                Facial Biometric & Liveness Verification
+              </div>
+              <div class="card-subtitle">Verify candidate identity against registered profile photo</div>
+            </div>
+            <span class="badge badge-neutral">Step 2 of 4</span>
+          </div>
+          <div class="card-body">
+            
+            <div class="grid-2" style="gap: 24px; align-items: start;">
+              <!-- Left: Live Camera Box -->
+              <div>
+                <div class="webcam-container" id="webcamBox">
+                  <video id="liveWebcamElement" class="webcam-video" autoplay playsinline muted></video>
+                  <div class="face-target-guide" id="faceOvalGuide"></div>
+                  <div class="webcam-overlay-badge">
+                    <span class="status-pulse" id="cameraPulse"></span>
+                    <span id="cameraStatusText">Camera Feed Active</span>
+                  </div>
+                </div>
+
+                <div style="margin-top: 12px; display: flex; gap: 10px;">
+                  <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="initWebcam()">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="23 7 16 12 23 17 23 7"></polygon>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                    </svg>
+                    Refresh Camera
+                  </button>
+                  <button class="btn btn-secondary btn-sm" onclick="simulateBiometricMatch()">
+                    Simulate Position
+                  </button>
+                </div>
+              </div>
+
+              <!-- Right: Verification Checks -->
+              <div>
+                <div style="margin-bottom: 16px;">
+                  <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 4px;">Candidate Biometric Match Checklist</h4>
+                  <p style="font-size: 12px; color: var(--ink-muted);">Ensure adequate lighting and position your face in the oval guide.</p>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 20px;">
+                  
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--line);">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <span class="badge badge-ok" id="checkFacePos">OK</span>
+                      <div>
+                        <div style="font-size: 13px; font-weight: 600;">Face Positioning</div>
+                        <div style="font-size: 11px; color: var(--ink-muted);">Centered within boundary guide</div>
+                      </div>
+                    </div>
+                    <span style="font-size: 12px; font-weight: 600; color: var(--ok);">99.2%</span>
+                  </div>
+
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--line);">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <span class="badge badge-ok" id="checkLiveness">OK</span>
+                      <div>
+                        <div style="font-size: 13px; font-weight: 600;">Liveness Detection</div>
+                        <div style="font-size: 11px; color: var(--ink-muted);">Blink and micro-nod check</div>
+                      </div>
+                    </div>
+                    <span style="font-size: 12px; font-weight: 600; color: var(--ok);">Passed</span>
+                  </div>
+
+                  <div style="display: flex; align-items: center; justify-content: space-between; padding: 10px 12px; background: var(--bg); border-radius: var(--radius-sm); border: 1px solid var(--line);">
+                    <div style="display: flex; align-items: center; gap: 10px;">
+                      <span class="badge badge-ok" id="checkIdentity">OK</span>
+                      <div>
+                        <div style="font-size: 13px; font-weight: 600;">Profile Identity Matching</div>
+                        <div style="font-size: 11px; color: var(--ink-muted);">Matched with STU-2026-8841 Record</div>
+                      </div>
+                    </div>
+                    <span style="font-size: 12px; font-weight: 600; color: var(--ok);">98.4% Match</span>
+                  </div>
+
+                </div>
+
+                <div id="biometricStatusAlert" style="padding: 12px; background: var(--ok-soft); border: 1px solid var(--ok-border); border-radius: var(--radius-sm); margin-bottom: 20px;">
+                  <div style="font-size: 13px; font-weight: 700; color: var(--ok); display: flex; align-items: center; gap: 6px;">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                      <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                    </svg>
+                    Identity Authenticated
+                  </div>
+                  <div style="font-size: 12px; color: var(--ink-secondary); margin-top: 2px;">
+                    Candidate biometrics match registered profile records. You are authorized to proceed.
+                  </div>
+                </div>
+
+                <div style="display: flex; gap: 10px;">
+                  <button class="btn btn-secondary" onclick="retryBiometrics()">Retry Capture</button>
+                  <button class="btn btn-primary" style="flex: 1;" onclick="switchTab(4)">
+                    Proceed to System Check
+                  </button>
+                </div>
+
+              </div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 5. SYSTEM CHECK -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-4">
+      <div style="max-width: 760px; margin: 20px auto;">
+        <div class="card">
+          <div class="card-header">
+            <div>
+              <div class="card-title">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+                  <line x1="8" y1="21" x2="16" y2="21"></line>
+                  <line x1="12" y1="17" x2="12" y2="21"></line>
+                </svg>
+                Hardware & Readiness System Diagnostic
+              </div>
+              <div class="card-subtitle">Verifying browser security, network throughput, and audio sensors</div>
+            </div>
+            <span class="badge badge-neutral">Step 3 of 4</span>
+          </div>
+          <div class="card-body">
+            
+            <div style="display: flex; flex-direction: column; gap: 14px; margin-bottom: 24px;">
+              
+              <!-- Check 1: Camera -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); display: flex; align-items: center; justify-content: center;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M23 7l-7 5 7 5V7z"></path>
+                      <rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style="font-weight: 600; font-size: 13px;">Webcam Stream Sensor</div>
+                    <div style="font-size: 11px; color: var(--ink-muted);">Integrated HD Camera (1280x720 @ 30 FPS)</div>
+                  </div>
+                </div>
+                <span class="badge badge-ok">Hardware Verified</span>
+              </div>
+
+              <!-- Check 2: Microphone with live audio meter -->
+              <div style="padding: 12px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);">
+                <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px;">
+                  <div style="display: flex; align-items: center; gap: 12px;">
+                    <div style="width: 36px; height: 36px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); display: flex; align-items: center; justify-content: center;">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+                        <line x1="12" y1="19" x2="12" y2="23"></line>
+                        <line x1="8" y1="23" x2="16" y2="23"></line>
+                      </svg>
+                    </div>
+                    <div>
+                      <div style="font-weight: 600; font-size: 13px;">Microphone Input Sensor</div>
+                      <div style="font-size: 11px; color: var(--ink-muted);">Real-time ambient noise analysis active (Speak to test)</div>
+                    </div>
+                  </div>
+                  <span class="badge badge-ok" id="micStatusBadge">Capturing Audio</span>
+                </div>
+                <div class="audio-meter-bar">
+                  <div class="audio-meter-fill" id="micLevelFill"></div>
+                </div>
+              </div>
+
+              <!-- Check 3: Internet Connectivity -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); display: flex; align-items: center; justify-content: center;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <path d="M5 12.55a11 11 0 0 1 14.08 0"></path>
+                      <path d="M1.42 9a16 16 0 0 1 21.16 0"></path>
+                      <path d="M8.53 16.11a6 6 0 0 1 6.95 0"></path>
+                      <line x1="12" y1="20" x2="12.01" y2="20"></line>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style="font-weight: 600; font-size: 13px;">Network Throughput & Ping</div>
+                    <div style="font-size: 11px; color: var(--ink-muted);">Round-trip latency: 22ms · Bandwidth: 48 Mbps</div>
+                  </div>
+                </div>
+                <span class="badge badge-ok">High Speed</span>
+              </div>
+
+              <!-- Check 4: Browser Compatibility & Display -->
+              <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px 16px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);">
+                <div style="display: flex; align-items: center; gap: 12px;">
+                  <div style="width: 36px; height: 36px; border-radius: 6px; background: var(--ok-soft); color: var(--ok); display: flex; align-items: center; justify-content: center;">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <line x1="2" y1="12" x2="22" y2="12"></line>
+                      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+                    </svg>
+                  </div>
+                  <div>
+                    <div style="font-weight: 600; font-size: 13px;">Secure Sandbox & Fullscreen API</div>
+                    <div style="font-size: 11px; color: var(--ink-muted);">Single display verified · Window blur watchdog active</div>
+                  </div>
+                </div>
+                <span class="badge badge-ok">Compliant</span>
+              </div>
+
+            </div>
+
+            <!-- Exam Consent & Instructions -->
+            <div style="border-top: 1px solid var(--line); padding-top: 16px; margin-bottom: 20px;">
+              <h4 style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Assessment Integrity Agreement</h4>
+              <ul style="font-size: 12px; color: var(--ink-secondary); padding-left: 20px; line-height: 1.6; margin-bottom: 14px;">
+                <li>No secondary electronic devices, smartwatches, or phones are permitted in the testing space.</li>
+                <li>Leaving full-screen mode or switching browser tabs logs an immediate infraction event.</li>
+                <li>Continuous AI gaze estimation and multi-face recognition will monitor the test session.</li>
+              </ul>
+
+              <label style="display: flex; align-items: flex-start; gap: 8px; font-size: 12px; color: var(--ink); cursor: pointer; user-select: none;">
+                <input type="checkbox" id="consentCheckbox" style="margin-top: 2px; accent-color: var(--pri);" onchange="toggleStartExamBtn()">
+                <span>I have read and consent to all test regulations, AI telemetry collection, and proctoring terms of Where U Elevate.</span>
+              </label>
+            </div>
+
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <button class="btn btn-secondary" onclick="switchTab(3)">Back to Biometrics</button>
+              <button class="btn btn-primary" id="startExamBtn" disabled onclick="launchAssessmentInterface()">
+                Start Proctored Exam
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="5 3 19 12 5 21 5 3"></polygon>
+                </svg>
+              </button>
+            </div>
+
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 6. EXAMINATION INTERFACE -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-5">
+      
+      <!-- Top Exam Bar -->
+      <div style="background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-md); padding: 12px 20px; margin-bottom: 16px; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 12px;">
+        <div>
+          <div style="font-size: 15px; font-weight: 700; color: var(--ink);">Advanced Data Structures & Algorithms Assessment</div>
+          <div style="font-size: 12px; color: var(--ink-muted);">Candidate: Anmol Sharma (STU-2026-8841) · Section A: Algorithm Efficiency</div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 16px;">
+          
+          <!-- Proctor Live Indicator -->
+          <div style="display: flex; align-items: center; gap: 8px; background: var(--ok-soft); border: 1px solid var(--ok-border); padding: 4px 10px; border-radius: 20px;">
+            <span class="status-pulse" id="examLivePulse"></span>
+            <span style="font-size: 12px; font-weight: 600; color: var(--ok);" id="examProctorStatus">AI Proctor Active</span>
+          </div>
+
+          <!-- Countdown Timer -->
+          <div style="display: flex; align-items: center; gap: 8px; background: var(--bg); border: 1px solid var(--line); padding: 6px 14px; border-radius: var(--radius-sm);">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 16 14"></polyline>
+            </svg>
+            <span style="font-size: 16px; font-weight: 700; font-family: monospace; color: var(--ink);" id="countdownTimer">29:45</span>
+          </div>
+
+          <button class="btn btn-outline-danger btn-sm" onclick="promptSubmitExam()">Submit Exam</button>
+        </div>
+      </div>
+
+      <!-- Main Exam Layout: Question Area + Palette Sidebar -->
+      <div style="display: grid; grid-template-columns: 1fr 300px; gap: 16px; align-items: start;">
+        
+        <!-- Question Workspace Panel -->
+        <div class="card" style="margin-bottom: 0;">
+          <div class="card-header">
+            <div style="display: flex; align-items: center; gap: 10px;">
+              <span class="badge badge-pri" id="questionNumberBadge">Question 1 of 5</span>
+              <span class="badge badge-neutral">+4 Marks, -1 Negative</span>
+            </div>
+            <button class="btn btn-secondary btn-sm" onclick="markForReview()">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+              </svg>
+              Mark for Review
+            </button>
+          </div>
+          
+          <div class="card-body">
+            
+            <!-- Question Text -->
+            <div id="questionStemText" style="font-size: 15px; font-weight: 500; color: var(--ink); line-height: 1.6; margin-bottom: 24px;">
+              In a balanced binary search tree containing n keys, each node also maintains the size of its subtree. What is the tightest asymptotic worst-case time complexity to locate the k-th smallest element?
+            </div>
+
+            <!-- Answer Options List -->
+            <div id="questionOptionsContainer" style="display: flex; flex-direction: column; gap: 12px; margin-bottom: 30px;">
+              <!-- Option choices injected dynamically -->
+            </div>
+
+            <!-- Navigation Buttons -->
+            <div style="display: flex; justify-content: space-between; align-items: center; border-top: 1px solid var(--line); padding-top: 16px;">
+              <button class="btn btn-secondary" id="btnPrevQuestion" onclick="prevQuestion()" disabled>
+                Previous
+              </button>
+
+              <div style="display: flex; gap: 8px;">
+                <button class="btn btn-secondary" onclick="clearCurrentResponse()">Clear Choice</button>
+                <button class="btn btn-primary" id="btnSaveNext" onclick="saveAndNext()">
+                  Save & Next
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Right Side: Webcam Pip & Question Palette -->
+        <div>
+          <!-- Candidate Live Proctoring PIP Thumbnail -->
+          <div class="card" style="margin-bottom: 16px;">
+            <div class="card-header" style="padding: 10px 14px;">
+              <span class="card-title" style="font-size: 12px;">Live Proctor Sensor Feed</span>
+              <span class="badge badge-ok" style="font-size: 10px;">Safe</span>
+            </div>
+            <div style="background: #0f172a; aspect-ratio: 16/9; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+              <video id="miniExamWebcam" style="width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1);" autoplay playsinline muted></video>
+              <div style="position: absolute; bottom: 6px; left: 8px; font-size: 10px; color: #ffffff; background: rgba(0,0,0,0.6); padding: 2px 6px; border-radius: 4px;">
+                Gaze: On-Screen
+              </div>
+            </div>
+          </div>
+
+          <!-- Question Palette Box -->
+          <div class="card">
+            <div class="card-header" style="padding: 12px 16px;">
+              <span class="card-title" style="font-size: 13px;">Question Navigation Palette</span>
+            </div>
+            <div class="card-body" style="padding: 16px;">
+              
+              <div class="palette-grid" id="questionPaletteGrid">
+                <!-- 5 question buttons rendered via JS -->
+              </div>
+
+              <!-- Palette Status Legend -->
+              <div style="margin-top: 20px; border-top: 1px solid var(--line); padding-top: 14px; display: flex; flex-direction: column; gap: 8px; font-size: 11px;">
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="width: 14px; height: 14px; border-radius: 3px; background: var(--ok); display: inline-block;"></span>
+                  <span>Answered</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="width: 14px; height: 14px; border-radius: 3px; background: #f1f5f9; border: 1px solid var(--line); display: inline-block;"></span>
+                  <span>Not Answered</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="width: 14px; height: 14px; border-radius: 3px; background: #7c3aed; display: inline-block;"></span>
+                  <span>Marked for Review</span>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                  <span style="width: 14px; height: 14px; border-radius: 3px; background: #7c3aed; position: relative; display: inline-block;">
+                    <span style="position: absolute; top: 1px; right: 1px; width: 4px; height: 4px; background: #10b981; border-radius: 50%;"></span>
+                  </span>
+                  <span>Answered & Marked for Review</span>
+                </div>
+              </div>
+
+              <button class="btn btn-primary" style="width: 100%; margin-top: 18px;" onclick="promptSubmitExam()">
+                Final Submit Exam
+              </button>
+
+            </div>
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 7. AI PROCTORING LOGS & ANOMALY SIMULATOR -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-6">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 700; color: var(--ink);">AI Proctoring Engine & Real-time Anomaly Signals</h1>
+          <p style="font-size: 13px; color: var(--ink-muted);">Multimodal vision, gaze tracking, and candidate behavioral telemetry</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-secondary btn-sm" onclick="clearProctoringLogs()">Clear Timeline</button>
+        </div>
+      </div>
+
+      <div class="grid-3" style="margin-bottom: 24px;">
+        <!-- Card 1: Gaze Tracking -->
+        <div class="card">
+          <div class="card-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 13px; font-weight: 600; color: var(--ink);">Gaze & Head Orientation</span>
+              <span class="badge badge-ok" id="gazeStatusBadge">Centered</span>
+            </div>
+            <div style="font-size: 24px; font-weight: 700; color: var(--pri); margin-bottom: 4px;">0° Yaw / 2° Pitch</div>
+            <p style="font-size: 12px; color: var(--ink-muted);">Candidate eyes focused steadily on exam view.</p>
+          </div>
+        </div>
+
+        <!-- Card 2: Multi-Face Detection -->
+        <div class="card">
+          <div class="card-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 13px; font-weight: 600; color: var(--ink);">Face Presence Tracker</span>
+              <span class="badge badge-ok" id="faceCountBadge">1 Face Detected</span>
+            </div>
+            <div style="font-size: 24px; font-weight: 700; color: var(--ok); margin-bottom: 4px;">Single Subject</div>
+            <p style="font-size: 12px; color: var(--ink-muted);">No unauthorized secondary persons in camera view.</p>
+          </div>
+        </div>
+
+        <!-- Card 3: Window Focus / Escape Lock -->
+        <div class="card">
+          <div class="card-body">
+            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+              <span style="font-size: 13px; font-weight: 600; color: var(--ink);">Browser Focus State</span>
+              <span class="badge badge-ok" id="focusStatusBadge">Window Focused</span>
+            </div>
+            <div style="font-size: 24px; font-weight: 700; color: var(--ink); margin-bottom: 4px;">0 Blur Events</div>
+            <p style="font-size: 12px; color: var(--ink-muted);">Operating in locked fullscreen assessment environment.</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Anomaly Triggers Sandbox for Testing -->
+      <div class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Live Anomaly Trigger Sandbox</div>
+            <div class="card-subtitle">Click to test instant real-time proctoring alert reactions</div>
+          </div>
+        </div>
+        <div class="card-body" style="display: flex; gap: 10px; flex-wrap: wrap;">
+          <button class="btn btn-secondary btn-sm" onclick="triggerProctorEvent('Face Not Detected', 'Candidate left the camera viewport.', 'bad')">
+            Trigger: Face Missing
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="triggerProctorEvent('Multiple Faces Detected', '2 faces identified in camera frame.', 'bad')">
+            Trigger: Multiple Faces
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="triggerProctorEvent('Head Movement / Gaze Deviation', 'Candidate looking away toward right for 8s.', 'warn')">
+            Trigger: Suspicious Gaze
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="triggerProctorEvent('Mobile Device Detected', 'Potential smartphone detected in hand.', 'bad')">
+            Trigger: Phone in Frame
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="triggerProctorEvent('Browser Focus Lost', 'Window focus shifted away from test tab.', 'bad')">
+            Trigger: Window Blur
+          </button>
+          <button class="btn btn-secondary btn-sm" onclick="triggerProctorEvent('Camera Disconnected', 'Hardware video feed interrupted.', 'bad')">
+            Trigger: Camera Lost
+          </button>
+        </div>
+      </div>
+
+      <!-- Real-time Incident Audit Stream -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Proctoring Telemetry Timeline</div>
+          <span class="badge badge-neutral" id="incidentCountBadge">0 Flagged Incidents</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Timestamp</th>
+                <th>Alert Event</th>
+                <th>Severity</th>
+                <th>Details</th>
+                <th>Action Taken</th>
+              </tr>
+            </thead>
+            <tbody id="proctorEventLogTable">
+              <tr>
+                <td colspan="5" style="text-align: center; color: var(--ink-muted); padding: 24px;">
+                  Session operating normally. No suspicious telemetry logged.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 8. ADMIN DASHBOARD -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-7">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 700; color: var(--ink);">Exam Administrator Control Center</h1>
+          <p style="font-size: 13px; color: var(--ink-muted);">Manage assessments, configure AI proctoring rules, and issue access codes</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary btn-sm" onclick="openModal('examCodeGeneratorModal')">Generate Codes</button>
+          <button class="btn btn-primary btn-sm" onclick="openModal('createExamModal')">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="12" y1="5" x2="12" y2="19"></line>
+              <line x1="5" y1="12" x2="19" y2="12"></line>
+            </svg>
+            Create New Exam
+          </button>
+        </div>
+      </div>
+
+      <!-- Admin Overview Stats -->
+      <div class="grid-4" style="margin-bottom: 24px;">
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">12</div>
+            <div class="stat-label">Active Exams</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: var(--ok-soft); color: var(--ok);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+              <circle cx="9" cy="7" r="4"></circle>
+              <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+              <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">142</div>
+            <div class="stat-label">Registered Candidates</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: var(--bad-soft); color: var(--bad);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              <line x1="12" y1="9" x2="12" y2="13"></line>
+              <line x1="12" y1="17" x2="12.01" y2="17"></line>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">3</div>
+            <div class="stat-label">Flagged Today</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: var(--pri-soft); color: var(--pri);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">99.4%</div>
+            <div class="stat-label">Platform Uptime</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Manage Exams Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Manage Assessment Rosters</div>
+          <button class="btn btn-secondary btn-sm" onclick="exportExamRoster()">Export CSV</button>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Exam Title & Code</th>
+                <th>Schedule Window</th>
+                <th>Duration</th>
+                <th>Questions</th>
+                <th>Candidates</th>
+                <th>Proctoring Profile</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Advanced Data Structures & Algorithms</strong>
+                  <div style="font-size: 11px; color: var(--pri); font-weight: 600;">Code: ELEVATE-2026</div>
+                </td>
+                <td>29 Oct, 17:00 IST</td>
+                <td>30 Mins</td>
+                <td>5 Items</td>
+                <td>28 Enrolled</td>
+                <td><span class="badge badge-ok">Strict Multimodal</span></td>
+                <td>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-secondary btn-sm" onclick="switchTab(8)">Monitor Live</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openModal('editQuestionsModal')">Edit</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Full Stack Systems Architecture & Design</strong>
+                  <div style="font-size: 11px; color: var(--pri); font-weight: 600;">Code: FSD-ARCH-44</div>
+                </td>
+                <td>30 Oct, 10:00 IST</td>
+                <td>60 Mins</td>
+                <td>20 Items</td>
+                <td>54 Enrolled</td>
+                <td><span class="badge badge-pri">Standard Vision</span></td>
+                <td>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-secondary btn-sm" onclick="switchTab(8)">Monitor Live</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openModal('editQuestionsModal')">Edit</button>
+                  </div>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>General Quantitative Aptitude & Analytical Reasoning</strong>
+                  <div style="font-size: 11px; color: var(--pri); font-weight: 600;">Code: APT-QUAN-88</div>
+                </td>
+                <td>01 Nov, 14:00 IST</td>
+                <td>45 Mins</td>
+                <td>30 Items</td>
+                <td>60 Enrolled</td>
+                <td><span class="badge badge-pri">Standard Vision</span></td>
+                <td>
+                  <div style="display: flex; gap: 6px;">
+                    <button class="btn btn-secondary btn-sm" onclick="switchTab(8)">Monitor Live</button>
+                    <button class="btn btn-secondary btn-sm" onclick="openModal('editQuestionsModal')">Edit</button>
+                  </div>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 9. LIVE MONITORING DASHBOARD -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-8">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 700; color: var(--ink);">Real-time Candidate Live Monitoring</h1>
+          <p style="font-size: 13px; color: var(--ink-muted);">Proctor multi-feed surveillance, threat level scoring, and direct interventions</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <span class="badge badge-ok" style="padding: 6px 12px; font-size: 12px;">6 Active Streams</span>
+        </div>
+      </div>
+
+      <div class="grid-3" style="gap: 16px;">
+        
+        <!-- Candidate Card 1 -->
+        <div class="card" style="margin-bottom: 0;">
+          <div style="background: #0f172a; aspect-ratio: 4/3; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            <div style="color: #94a3b8; font-size: 12px; text-align: center;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#64748b" stroke-width="1.5" style="margin: 0 auto 6px; display: block;">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+                <circle cx="12" cy="7" r="4"></circle>
+              </svg>
+              <span>Live Cam Stream #1</span>
+            </div>
+            <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #ffffff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">
+              Anmol Sharma
+            </div>
+            <div style="position: absolute; top: 10px; right: 10px;">
+              <span class="badge badge-ok" style="font-size: 10px;">Normal</span>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 14px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--ink-muted);">Candidate ID:</span>
+              <strong>STU-2026-8841</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--ink-muted);">Progress:</span>
+              <strong>3 of 5 Answered</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 12px;">
+              <span style="color: var(--ink-muted);">Flags:</span>
+              <span style="color: var(--ok); font-weight: 600;">0 Warnings</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="sendCandidateMessage('STU-2026-8841')">Message</button>
+              <button class="btn btn-outline-danger btn-sm" onclick="forceLockoutCandidate('STU-2026-8841')">Lockout</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Candidate Card 2 -->
+        <div class="card" style="margin-bottom: 0;">
+          <div style="background: #0f172a; aspect-ratio: 4/3; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            <div style="color: #94a3b8; font-size: 12px; text-align: center;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#f59e0b" stroke-width="1.5" style="margin: 0 auto 6px; display: block;">
+                <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+              </svg>
+              <span>Live Cam Stream #2</span>
+            </div>
+            <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #ffffff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">
+              Priya Verma
+            </div>
+            <div style="position: absolute; top: 10px; right: 10px;">
+              <span class="badge badge-warn" style="font-size: 10px;">Suspicious Gaze</span>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 14px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--ink-muted);">Candidate ID:</span>
+              <strong>STU-2026-5512</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--ink-muted);">Progress:</span>
+              <strong>2 of 5 Answered</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 12px;">
+              <span style="color: var(--ink-muted);">Flags:</span>
+              <span style="color: var(--warn); font-weight: 600;">2 Warnings</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="sendCandidateMessage('STU-2026-5512')">Message</button>
+              <button class="btn btn-outline-danger btn-sm" onclick="forceLockoutCandidate('STU-2026-5512')">Lockout</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Candidate Card 3 -->
+        <div class="card" style="margin-bottom: 0;">
+          <div style="background: #0f172a; aspect-ratio: 4/3; position: relative; overflow: hidden; display: flex; align-items: center; justify-content: center;">
+            <div style="color: #94a3b8; font-size: 12px; text-align: center;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="1.5" style="margin: 0 auto 6px; display: block;">
+                <circle cx="12" cy="12" r="10"></circle>
+                <line x1="15" y1="9" x2="9" y2="15"></line>
+                <line x1="9" y1="9" x2="15" y2="15"></line>
+              </svg>
+              <span>Live Cam Stream #3</span>
+            </div>
+            <div style="position: absolute; top: 10px; left: 10px; background: rgba(0,0,0,0.7); color: #ffffff; padding: 2px 6px; border-radius: 4px; font-size: 10px; font-weight: 600;">
+              Rohan Mehta
+            </div>
+            <div style="position: absolute; top: 10px; right: 10px;">
+              <span class="badge badge-bad" style="font-size: 10px;">Multiple Faces</span>
+            </div>
+          </div>
+          <div class="card-body" style="padding: 14px;">
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--ink-muted);">Candidate ID:</span>
+              <strong>STU-2026-7729</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 6px;">
+              <span style="color: var(--ink-muted);">Progress:</span>
+              <strong>1 of 5 Answered</strong>
+            </div>
+            <div style="display: flex; justify-content: space-between; font-size: 12px; margin-bottom: 12px;">
+              <span style="color: var(--ink-muted);">Flags:</span>
+              <span style="color: var(--bad); font-weight: 600;">4 Warnings</span>
+            </div>
+            <div style="display: flex; gap: 6px;">
+              <button class="btn btn-secondary btn-sm" style="flex: 1;" onclick="sendCandidateMessage('STU-2026-7729')">Message</button>
+              <button class="btn btn-danger btn-sm" onclick="forceLockoutCandidate('STU-2026-7729')">Lockout</button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 10. ALERT MANAGEMENT -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-9">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 700; color: var(--ink);">Flagged Incidents & Alert Management</h1>
+          <p style="font-size: 13px; color: var(--ink-muted);">Review flagged proctoring violations, examiner notes, and disposition</p>
+        </div>
+        <div style="display: flex; gap: 10px;">
+          <button class="btn btn-secondary btn-sm" onclick="filterAlerts('all')">All</button>
+          <button class="btn btn-secondary btn-sm" onclick="filterAlerts('high')">High Severity</button>
+          <button class="btn btn-secondary btn-sm" onclick="filterAlerts('medium')">Medium</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Alert Event</th>
+                <th>Candidate Details</th>
+                <th>Severity</th>
+                <th>Detection Source</th>
+                <th>Timestamp</th>
+                <th>Review Status</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>
+                  <strong>Multiple Faces Detected in Frame</strong>
+                  <div style="font-size: 11px; color: var(--ink-muted);">2 face signatures verified by AI Vision</div>
+                </td>
+                <td>Rohan Mehta (STU-2026-7729)</td>
+                <td><span class="badge badge-bad">Critical</span></td>
+                <td>Webcam BlazeFace Model</td>
+                <td>16:38:12 IST</td>
+                <td><span class="badge badge-warn">Pending Examiner Review</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="openAlertReviewModal('Rohan Mehta', 'Multiple Faces Detected', 'Secondary face entered the camera boundary.')">Review</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Gaze Deviation Exceeding Threshold</strong>
+                  <div style="font-size: 11px; color: var(--ink-muted);">Off-screen gaze duration > 9 seconds</div>
+                </td>
+                <td>Priya Verma (STU-2026-5512)</td>
+                <td><span class="badge badge-warn">Medium</span></td>
+                <td>Eye Gaze Vector Estimation</td>
+                <td>16:32:45 IST</td>
+                <td><span class="badge badge-ok">Reviewed: Normal Glanc</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="openAlertReviewModal('Priya Verma', 'Gaze Deviation', 'Candidate briefly checked clock.')">Details</button>
+                </td>
+              </tr>
+              <tr>
+                <td>
+                  <strong>Window Focus Lost (Desktop Escape)</strong>
+                  <div style="font-size: 11px; color: var(--ink-muted);">Operating system blur triggered</div>
+                </td>
+                <td>Kavita Rao (STU-2026-1190)</td>
+                <td><span class="badge badge-bad">High</span></td>
+                <td>Window Focus Telemetry</td>
+                <td>16:15:20 IST</td>
+                <td><span class="badge badge-bad">Penalty Applied</span></td>
+                <td>
+                  <button class="btn btn-secondary btn-sm" onclick="openAlertReviewModal('Kavita Rao', 'Window Blur', 'Window focus diverted to another app.')">Details</button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 11. RESULTS & REPORTS -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-10">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 700; color: var(--ink);">Results, Analytics & Verification Reports</h1>
+          <p style="font-size: 13px; color: var(--ink-muted);">Candidate scores, proctoring integrity scores, and exportable PDF summaries</p>
+        </div>
+        <div style="display: flex; gap: 8px;">
+          <button class="btn btn-primary btn-sm" onclick="exportResultsSummary()">Export Full Gradebook</button>
+        </div>
+      </div>
+
+      <!-- Performance Summary -->
+      <div class="grid-4" style="margin-bottom: 24px;">
+        <div class="stat-card">
+          <div class="stat-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="8" r="7"></circle>
+              <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">84.2%</div>
+            <div class="stat-label">Pass Percentage</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: var(--ok-soft); color: var(--ok);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <line x1="18" y1="20" x2="18" y2="10"></line>
+              <line x1="12" y1="20" x2="12" y2="4"></line>
+              <line x1="6" y1="20" x2="6" y2="14"></line>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">78 / 100</div>
+            <div class="stat-label">Median Exam Score</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: var(--pri-soft); color: var(--pri);">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <polyline points="12 6 12 12 14 14"></polyline>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">24.5 min</div>
+            <div class="stat-label">Avg Completion Time</div>
+          </div>
+        </div>
+
+        <div class="stat-card">
+          <div class="stat-icon" style="background: #fdf4ff; color: #a855f7;">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </div>
+          <div>
+            <div class="stat-val">97.9%</div>
+            <div class="stat-label">Verified Clean Sessions</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Candidate Performance Table -->
+      <div class="card">
+        <div class="card-header">
+          <div class="card-title">Candidate Performance & Integrity Ledger</div>
+          <span class="badge badge-pri">142 Candidates</span>
+        </div>
+        <div class="table-container">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Candidate</th>
+                <th>Candidate ID</th>
+                <th>Raw Score</th>
+                <th>Percentage</th>
+                <th>Percentile</th>
+                <th>Proctor Integrity Score</th>
+                <th>Outcome</th>
+                <th>Transcript</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><strong>Anmol Sharma</strong></td>
+                <td>STU-2026-8841</td>
+                <td><strong>96 / 100</strong></td>
+                <td>96.0%</td>
+                <td>98.5%</td>
+                <td><span class="badge badge-ok">99.8% (Clean)</span></td>
+                <td><span class="badge badge-ok">Qualified</span></td>
+                <td><button class="btn btn-secondary btn-sm" onclick="showScoreReport('Anmol Sharma', 96)">View</button></td>
+              </tr>
+              <tr>
+                <td><strong>Priya Verma</strong></td>
+                <td>STU-2026-5512</td>
+                <td><strong>84 / 100</strong></td>
+                <td>84.0%</td>
+                <td>88.2%</td>
+                <td><span class="badge badge-warn">92.0% (2 Flags)</span></td>
+                <td><span class="badge badge-ok">Qualified</span></td>
+                <td><button class="btn btn-secondary btn-sm" onclick="showScoreReport('Priya Verma', 84)">View</button></td>
+              </tr>
+              <tr>
+                <td><strong>Rohan Mehta</strong></td>
+                <td>STU-2026-7729</td>
+                <td><strong>42 / 100</strong></td>
+                <td>42.0%</td>
+                <td>34.1%</td>
+                <td><span class="badge badge-bad">64.0% (Disqualified)</span></td>
+                <td><span class="badge badge-bad">Disqualified</span></td>
+                <td><button class="btn btn-secondary btn-sm" onclick="showScoreReport('Rohan Mehta', 42)">View</button></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================== -->
+    <!-- 12. PROFILE & SETTINGS -->
+    <!-- ========================================== -->
+    <section class="view-panel" id="view-11">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <div>
+          <h1 style="font-size: 20px; font-weight: 700; color: var(--ink);">Account Profile & Assessment Settings</h1>
+          <p style="font-size: 13px; color: var(--ink-muted);">Manage candidate credentials, security keys, and proctoring notification preferences</p>
+        </div>
+      </div>
+
+      <div class="grid-2" style="gap: 20px; align-items: start;">
+        
+        <!-- Left: Profile Info -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Personal Credentials</div>
+          </div>
+          <div class="card-body">
+            
+            <div class="form-group">
+              <label class="form-label">Full Legal Name</label>
+              <input type="text" class="input-field" value="Anmol Sharma" id="profileFullName">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Registered Email Address</label>
+              <input type="email" class="input-field" value="anmol@whereuelevate.com" id="profileEmail">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Candidate Registration ID</label>
+              <input type="text" class="input-field" value="STU-2026-8841" disabled style="background: var(--bg); color: var(--ink-muted);">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Department / Cohort</label>
+              <input type="text" class="input-field" value="Where U Elevate Engineering Fellowship" id="profileCohort">
+            </div>
+
+            <button class="btn btn-primary" onclick="saveProfileChanges()">Save Profile Updates</button>
+          </div>
+        </div>
+
+        <!-- Right: Security & Password -->
+        <div class="card">
+          <div class="card-header">
+            <div class="card-title">Security & Password Management</div>
+          </div>
+          <div class="card-body">
+            
+            <div class="form-group">
+              <label class="form-label">Current Password</label>
+              <input type="password" class="input-field" id="profileCurrentPass" placeholder="Enter existing password">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">New Secure Password</label>
+              <input type="password" class="input-field" id="profileNewPass" placeholder="Minimum 8 characters">
+            </div>
+
+            <div class="form-group">
+              <label class="form-label">Confirm New Password</label>
+              <input type="password" class="input-field" id="profileConfirmPass" placeholder="Repeat new password">
+            </div>
+
+            <button class="btn btn-secondary" onclick="updatePassword()">Update Account Password</button>
+
+            <div style="margin-top: 24px; border-top: 1px solid var(--line); padding-top: 16px;">
+              <h4 style="font-size: 13px; font-weight: 700; margin-bottom: 8px;">Proctoring Privacy Preferences</h4>
+              
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; margin-bottom: 8px; cursor: pointer;">
+                <input type="checkbox" checked style="accent-color: var(--pri);">
+                <span>Email me copies of all proctoring audit receipts upon test completion</span>
+              </label>
+
+              <label style="display: flex; align-items: center; gap: 8px; font-size: 12px; cursor: pointer;">
+                <input type="checkbox" checked style="accent-color: var(--pri);">
+                <span>Purge temporary biometric video recordings after 30 days of verification</span>
+              </label>
+            </div>
+
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+  <!-- ========================================== -->
+  <!-- MODALS -->
+  <!-- ========================================== -->
+
+  <!-- Submit Exam Confirmation Modal -->
+  <div class="modal-overlay" id="submitExamModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title">Confirm Final Assessment Submission</div>
+        <button class="input-icon-btn" onclick="closeModal('submitExamModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <p style="font-size: 13px; color: var(--ink-secondary); margin-bottom: 16px;">
+          Are you sure you wish to submit your answers? Once submitted, your examination answers are locked and sent to the grading server.
+        </p>
+
+        <div class="grid-3" style="gap: 10px; margin-bottom: 16px;">
+          <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+            <div style="font-size: 18px; font-weight: 700; color: var(--ok);" id="modalCountAnswered">1</div>
+            <div style="font-size: 11px; color: var(--ink-muted);">Answered</div>
+          </div>
+          <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+            <div style="font-size: 18px; font-weight: 700; color: #7c3aed;" id="modalCountReview">0</div>
+            <div style="font-size: 11px; color: var(--ink-muted);">For Review</div>
+          </div>
+          <div style="background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 12px; text-align: center;">
+            <div style="font-size: 18px; font-weight: 700; color: var(--ink-muted);" id="modalCountUnanswered">4</div>
+            <div style="font-size: 11px; color: var(--ink-muted);">Unanswered</div>
+          </div>
+        </div>
+
+        <div style="font-size: 12px; color: var(--warn); background: var(--warn-soft); padding: 10px; border-radius: var(--radius-sm); border: 1px solid var(--warn-border);">
+          Notice: Once you press Confirm Submission, your test session and camera monitoring will conclude immediately.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('submitExamModal')">Return to Exam</button>
+        <button class="btn btn-primary" onclick="confirmFinalSubmit()">Confirm Submission</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Exam Modal -->
+  <div class="modal-overlay" id="createExamModal">
+    <div class="modal-card" style="max-width: 600px;">
+      <div class="modal-header">
+        <div class="modal-title">Create New Proctored Assessment</div>
+        <button class="input-icon-btn" onclick="closeModal('createExamModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-group">
+          <label class="form-label">Assessment Title</label>
+          <input type="text" class="input-field" placeholder="e.g. Distributed Systems & Cloud Computing Midterm">
+        </div>
+        <div class="grid-2">
+          <div class="form-group">
+            <label class="form-label">Duration (Minutes)</label>
+            <input type="number" class="input-field" value="45">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Total Marks</label>
+            <input type="number" class="input-field" value="100">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Access Code</label>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" class="input-field" id="newExamGeneratedCode" value="ELV-9014" readonly>
+            <button class="btn btn-secondary" onclick="generateNewRandomCode()">Generate Code</button>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">AI Proctoring Rules</label>
+          <div style="display: flex; flex-direction: column; gap: 6px; font-size: 12px;">
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" checked style="accent-color: var(--pri);"> Enforce Fullscreen Kiosk Mode</label>
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" checked style="accent-color: var(--pri);"> Continuous Eye Gaze Tracking</label>
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" checked style="accent-color: var(--pri);"> Multi-face and Secondary Person Detection</label>
+            <label style="display: flex; align-items: center; gap: 6px;"><input type="checkbox" checked style="accent-color: var(--pri);"> Ambient Audio Anomaly Tracking</label>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('createExamModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="saveNewExam()">Save & Publish Exam</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Alert Review Modal -->
+  <div class="modal-overlay" id="alertReviewModal">
+    <div class="modal-card">
+      <div class="modal-header">
+        <div class="modal-title" id="alertReviewTitle">Review Flagged Telemetry</div>
+        <button class="input-icon-btn" onclick="closeModal('alertReviewModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div style="background: #0f172a; aspect-ratio: 16/9; border-radius: var(--radius-sm); margin-bottom: 14px; display: flex; align-items: center; justify-content: center; color: #94a3b8; font-size: 12px;">
+          <span>Event Snapshot Frame Stored on Server</span>
+        </div>
+        <div style="font-size: 13px; margin-bottom: 12px;" id="alertReviewDetails">
+          Candidate gaze deviated outside permissible quadrant for over 8.5 seconds.
+        </div>
+        <div class="form-group">
+          <label class="form-label">Examiner Disposition Remarks</label>
+          <textarea class="input-field" style="height: 70px; padding: 8px;" placeholder="Add notes regarding justification or penalty..."></textarea>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" onclick="closeModal('alertReviewModal')">Dismiss as False Positive</button>
+        <button class="btn btn-danger" onclick="applyDisqualification()">Confirm Infraction</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Notification Drawer Modal -->
+  <div class="modal-overlay" id="notificationModal">
+    <div class="modal-card" style="max-width: 440px;">
+      <div class="modal-header">
+        <div class="modal-title">Notifications & System Alerts</div>
+        <button class="input-icon-btn" onclick="closeModal('notificationModal')">✕</button>
+      </div>
+      <div class="modal-body" style="display: flex; flex-direction: column; gap: 10px;">
+        <div style="padding: 10px; background: var(--pri-subtle); border: 1px solid var(--pri-border); border-radius: var(--radius-sm);">
+          <div style="font-weight: 600; font-size: 13px; color: var(--pri);">Assessment Code Verified</div>
+          <div style="font-size: 12px; color: var(--ink-secondary);">Your test seat for Advanced Data Structures has been provisioned.</div>
+          <div style="font-size: 10px; color: var(--ink-muted); margin-top: 4px;">5 minutes ago</div>
+        </div>
+        <div style="padding: 10px; background: var(--bg); border: 1px solid var(--line); border-radius: var(--radius-sm);">
+          <div style="font-weight: 600; font-size: 13px;">System Check Completed</div>
+          <div style="font-size: 12px; color: var(--ink-secondary);">Webcam, microphone, and secure browser parameters verified.</div>
+          <div style="font-size: 10px; color: var(--ink-muted); margin-top: 4px;">2 hours ago</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary btn-sm" onclick="closeModal('notificationModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Stack Container -->
+  <div class="toast-container" id="toastContainer"></div>
+
+  <!-- ========================================== -->
+  <!-- JAVASCRIPT APPLICATION LOGIC -->
+  <!-- ========================================== -->
+  <script>
+    // --- Application State ---
+    let currentRole = 'student';
+    let currentTab = 0;
+    let webcamStream = null;
+    let micAudioContext = null;
+    let micAnalyser = null;
+    let micDataArray = null;
+    let micPollInterval = null;
+    let examTimerInterval = null;
+    let remainingSeconds = 1785; // 29m 45s
+    
+    // Examination Data
+    const EXAM_QUESTIONS = [
+      {
+        id: 1,
+        stem: "In a balanced binary search tree containing n keys, each node also maintains the size of its subtree. What is the tightest asymptotic worst-case time complexity to locate the k-th smallest element?",
+        options: [
+          "O(1)",
+          "O(log n)",
+          "O(k)",
+          "O(n)"
+        ],
+        selected: 1, // Pre-selected Option B
+        markedForReview: false
+      },
+      {
+        id: 2,
+        stem: "Which sorting algorithm performs with guaranteed O(n log n) worst-case time complexity while requiring strictly O(1) auxiliary auxiliary space?",
+        options: [
+          "Merge Sort",
+          "Heap Sort",
+          "Quick Sort with median-of-three pivot",
+          "Counting Sort"
+        ],
+        selected: null,
+        markedForReview: false
+      },
+      {
+        id: 3,
+        stem: "In a Red-Black Tree with n internal nodes, what is the maximum possible height (measured as the longest path from root to a leaf)?",
+        options: [
+          "log2(n + 1)",
+          "2 * log2(n + 1)",
+          "1.44 * log2(n)",
+          "sqrt(n)"
+        ],
+        selected: null,
+        markedForReview: false
+      },
+      {
+        id: 4,
+        stem: "What is the amortized time complexity of the union-by-rank with path-compression operations in a Disjoint Set Union (DSU) structure across m operations on n elements?",
+        options: [
+          "O(m * alpha(n)) where alpha is the inverse Ackermann function",
+          "O(m * log n)",
+          "O(m * log* n)",
+          "O(m + n)"
+        ],
+        selected: null,
+        markedForReview: false
+      },
+      {
+        id: 5,
+        stem: "When using Dijkstra's algorithm implemented with a binary min-heap on a graph with V vertices and E edges, what is the tightest running time bound?",
+        options: [
+          "O(V^2)",
+          "O(E + V log V)",
+          "O((V + E) log V)",
+          "O(E log E)"
+        ],
+        selected: null,
+        markedForReview: false
+      }
+    ];
+
+    let currentQuestionIndex = 0;
+
+    // --- Tab Navigation Switcher ---
+    function switchTab(index) {
+      currentTab = index;
+      const buttons = document.querySelectorAll('.feature-nav-bar .tab-btn');
+      buttons.forEach((btn, i) => {
+        if (i === index) btn.classList.add('active');
+        else btn.classList.remove('active');
+      });
+
+      const panels = document.querySelectorAll('.main-content .view-panel');
+      panels.forEach((p, i) => {
+        if (i === index) p.classList.add('active');
+        else p.classList.remove('active');
+      });
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+
+      // Trigger views setup if needed
+      if (index === 3) {
+        initWebcam();
+      } else if (index === 4) {
+        initAudioMeter();
+      } else if (index === 5) {
+        startExamTimer();
+        renderQuestion(currentQuestionIndex);
+        renderQuestionPalette();
+        initMiniWebcam();
+      }
+    }
+
+    // --- Role Switching ---
+    function toggleRole() {
+      if (currentRole === 'student') {
+        setRole('admin');
+      } else {
+        setRole('student');
+      }
+    }
+
+    function setRole(role) {
+      currentRole = role;
+      const badge = document.getElementById('currentRoleBadge');
+      const label = document.getElementById('roleLabel');
+      const toggleBtn = document.getElementById('roleToggleBtn');
+
+      if (role === 'admin') {
+        label.innerText = 'Exam Administrator';
+        badge.style.background = '#fef3c7';
+        badge.style.color = '#92400e';
+        badge.style.borderColor = '#fde68a';
+        toggleBtn.innerText = 'Switch to Student';
+        showToast('Switched to Administrator Workspace', 'ok');
+      } else {
+        label.innerText = 'Student Candidate';
+        badge.style.background = 'var(--pri-soft)';
+        badge.style.color = 'var(--pri-hover)';
+        badge.style.borderColor = 'var(--pri-border)';
+        toggleBtn.innerText = 'Switch to Admin';
+        showToast('Switched to Student Workspace', 'ok');
+      }
+    }
+
+    // --- Feature 1: Login Logic ---
+    function setLoginType(type) {
+      const studentBtn = document.getElementById('loginTypeStudent');
+      const adminBtn = document.getElementById('loginTypeAdmin');
+      const label = document.getElementById('loginIdentifierLabel');
+      const input = document.getElementById('loginIdentifier');
+
+      if (type === 'student') {
+        studentBtn.style.background = '#ffffff';
+        studentBtn.style.color = 'var(--pri)';
+        studentBtn.style.fontWeight = '700';
+        studentBtn.style.borderColor = 'var(--line)';
+
+        adminBtn.style.background = 'transparent';
+        adminBtn.style.color = 'var(--ink-secondary)';
+        adminBtn.style.fontWeight = '500';
+        adminBtn.style.borderColor = 'transparent';
+
+        label.innerText = 'Student ID or Registered Email';
+        input.value = 'STU-2026-8841';
+      } else {
+        adminBtn.style.background = '#ffffff';
+        adminBtn.style.color = 'var(--pri)';
+        adminBtn.style.fontWeight = '700';
+        adminBtn.style.borderColor = 'var(--line)';
+
+        studentBtn.style.background = 'transparent';
+        studentBtn.style.color = 'var(--ink-secondary)';
+        studentBtn.style.fontWeight = '500';
+        studentBtn.style.borderColor = 'transparent';
+
+        label.innerText = 'Administrator Username / Org Email';
+        input.value = 'admin@whereuelevate.com';
+      }
+    }
+
+    function togglePasswordVisibility(inputId, iconId) {
+      const input = document.getElementById(inputId);
+      if (input.type === 'password') {
+        input.type = 'text';
+      } else {
+        input.type = 'password';
+      }
+    }
+
+    function handleLoginSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById('loginIdentifier').value;
+      if (input.includes('admin')) {
+        setRole('admin');
+        switchTab(7); // Jump to Admin Dashboard
+      } else {
+        setRole('student');
+        switchTab(1); // Jump to Student Dashboard
+      }
+      showToast('Authentication successful', 'ok');
+    }
+
+    function quickLogin(role) {
+      if (role === 'student') {
+        setLoginType('student');
+        setRole('student');
+        switchTab(1);
+      } else {
+        setLoginType('admin');
+        setRole('admin');
+        switchTab(7);
+      }
+      showToast(`Signed in as ${role === 'admin' ? 'Administrator' : 'Candidate'}`, 'ok');
+    }
+
+    // --- Feature 2 & 3: Exam Code Verification ---
+    function validateQuickCode() {
+      const code = document.getElementById('quickExamCodeInput').value.trim().toUpperCase();
+      if (code === 'ELEVATE-2026') {
+        switchTab(2);
+        document.getElementById('verifyExamCodeInput').value = code;
+        document.getElementById('validatedExamDetailsCard').style.display = 'block';
+        showToast('Exam code verified: Technical Assessment Active', 'ok');
+      } else {
+        showToast('Invalid or expired exam code. Try ELEVATE-2026', 'bad');
+      }
+    }
+
+    function startExamFlow(code) {
+      switchTab(2);
+      document.getElementById('verifyExamCodeInput').value = code;
+      document.getElementById('validatedExamDetailsCard').style.display = 'block';
+    }
+
+    function performCodeValidation() {
+      const code = document.getElementById('verifyExamCodeInput').value.trim().toUpperCase();
+      if (code === 'ELEVATE-2026') {
+        document.getElementById('validatedExamDetailsCard').style.display = 'block';
+        showToast('Assessment code verified. Eligibility checked.', 'ok');
+      } else {
+        showToast('Invalid Exam Code. Please verify your invitation.', 'bad');
+      }
+    }
+
+    // --- Feature 4: Facial Biometric Verification ---
+    async function initWebcam() {
+      const video = document.getElementById('liveWebcamElement');
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          throw new Error('Camera API unavailable');
+        }
+        if (webcamStream) {
+          video.srcObject = webcamStream;
+          return;
+        }
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: { ideal: 640 }, height: { ideal: 480 } },
+          audio: false
+        });
+        webcamStream = stream;
+        video.srcObject = stream;
+        document.getElementById('cameraPulse').className = 'status-pulse';
+        document.getElementById('cameraStatusText').innerText = 'Camera Feed Active';
+      } catch (err) {
+        // Fallback simulation if camera permissions are blocked
+        document.getElementById('cameraPulse').className = 'status-pulse warning';
+        document.getElementById('cameraStatusText').innerText = 'Simulated Camera Preview';
+        console.log('Webcam permission not granted; using fallback preview.');
+      }
+    }
+
+    function simulateBiometricMatch() {
+      const guide = document.getElementById('faceOvalGuide');
+      guide.classList.toggle('matched');
+      const isMatched = guide.classList.contains('matched');
+      if (isMatched) {
+        document.getElementById('checkFacePos').innerText = 'OK';
+        document.getElementById('checkFacePos').className = 'badge badge-ok';
+        showToast('Face centered and positioned in target guide', 'ok');
+      } else {
+        document.getElementById('checkFacePos').innerText = 'Align';
+        document.getElementById('checkFacePos').className = 'badge badge-warn';
+      }
+    }
+
+    function retryBiometrics() {
+      document.getElementById('faceOvalGuide').classList.remove('matched');
+      showToast('Resetting facial scan sensors...', 'warn');
+      setTimeout(() => {
+        document.getElementById('faceOvalGuide').classList.add('matched');
+        showToast('Biometrics re-verified with high confidence', 'ok');
+      }, 1000);
+    }
+
+    // --- Feature 5: System Check & Audio Meter ---
+    function initAudioMeter() {
+      try {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        if (!micAudioContext) {
+          micAudioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        navigator.mediaDevices.getUserMedia({ audio: true, video: false })
+          .then(stream => {
+            const source = micAudioContext.createMediaStreamSource(stream);
+            micAnalyser = micAudioContext.createAnalyser();
+            micAnalyser.fftSize = 64;
+            source.connect(micAnalyser);
+            micDataArray = new Uint8Array(micAnalyser.frequencyBinCount);
+
+            if (micPollInterval) clearInterval(micPollInterval);
+            micPollInterval = setInterval(() => {
+              micAnalyser.getByteFrequencyData(micDataArray);
+              let sum = 0;
+              for (let i = 0; i < micDataArray.length; i++) {
+                sum += micDataArray[i];
+              }
+              let avg = sum / micDataArray.length;
+              let pct = Math.min(100, Math.max(10, Math.round((avg / 128) * 100)));
+              const fill = document.getElementById('micLevelFill');
+              if (fill) fill.style.width = pct + '%';
+            }, 100);
+          })
+          .catch(() => {
+            // Simulated mic oscillation if blocked
+            if (micPollInterval) clearInterval(micPollInterval);
+            micPollInterval = setInterval(() => {
+              let pct = 15 + Math.floor(Math.random() * 25);
+              const fill = document.getElementById('micLevelFill');
+              if (fill) fill.style.width = pct + '%';
+            }, 300);
+          });
+      } catch (e) {
+        console.log('Audio analysis fallback');
+      }
+    }
+
+    function toggleStartExamBtn() {
+      const consent = document.getElementById('consentCheckbox').checked;
+      const btn = document.getElementById('startExamBtn');
+      btn.disabled = !consent;
+    }
+
+    function launchAssessmentInterface() {
+      switchTab(5); // Jump to Exam view
+      showToast('Assessment environment activated in proctored mode', 'ok');
+    }
+
+    // --- Feature 6: Examination Interface & Palette Logic ---
+    function initMiniWebcam() {
+      const miniVid = document.getElementById('miniExamWebcam');
+      if (webcamStream && miniVid) {
+        miniVid.srcObject = webcamStream;
+      }
+    }
+
+    function startExamTimer() {
+      if (examTimerInterval) return;
+      examTimerInterval = setInterval(() => {
+        if (remainingSeconds > 0) {
+          remainingSeconds--;
+          const m = Math.floor(remainingSeconds / 60);
+          const s = remainingSeconds % 60;
+          const display = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+          const el = document.getElementById('countdownTimer');
+          if (el) el.innerText = display;
+        } else {
+          clearInterval(examTimerInterval);
+          promptSubmitExam();
+        }
+      }, 1000);
+    }
+
+    function renderQuestion(idx) {
+      currentQuestionIndex = idx;
+      const q = EXAM_QUESTIONS[idx];
+
+      // Update question badge and text
+      document.getElementById('questionNumberBadge').innerText = `Question ${idx + 1} of ${EXAM_QUESTIONS.length}`;
+      document.getElementById('questionStemText').innerText = q.stem;
+
+      // Update Previous button state
+      document.getElementById('btnPrevQuestion').disabled = (idx === 0);
+
+      // Render Options
+      const container = document.getElementById('questionOptionsContainer');
+      container.innerHTML = '';
+
+      q.options.forEach((optText, optIdx) => {
+        const isChecked = q.selected === optIdx;
+        const optCard = document.createElement('label');
+        optCard.style.display = 'flex';
+        optCard.style.alignItems = 'center';
+        optCard.style.gap = '12px';
+        optCard.style.padding = '12px 16px';
+        optCard.style.border = isChecked ? '1px solid var(--pri)' : '1px solid var(--line)';
+        optCard.style.background = isChecked ? 'var(--pri-subtle)' : '#ffffff';
+        optCard.style.borderRadius = 'var(--radius-sm)';
+        optCard.style.cursor = 'pointer';
+        optCard.style.transition = 'all 0.15s ease';
+
+        optCard.innerHTML = `
+          <input type="radio" name="examOptionRadio" value="${optIdx}" ${isChecked ? 'checked' : ''} style="accent-color: var(--pri);" onchange="selectOption(${idx}, ${optIdx})">
+          <span style="font-size: 13px; font-weight: ${isChecked ? '600' : '400'}; color: var(--ink);">${optText}</span>
+        `;
+        container.appendChild(optCard);
+      });
+
+      renderQuestionPalette();
+    }
+
+    function selectOption(qIdx, optIdx) {
+      EXAM_QUESTIONS[qIdx].selected = optIdx;
+      renderQuestion(qIdx);
+    }
+
+    function clearCurrentResponse() {
+      EXAM_QUESTIONS[currentQuestionIndex].selected = null;
+      renderQuestion(currentQuestionIndex);
+      showToast('Selection cleared', 'warn');
+    }
+
+    function markForReview() {
+      const q = EXAM_QUESTIONS[currentQuestionIndex];
+      q.markedForReview = !q.markedForReview;
+      renderQuestionPalette();
+      showToast(q.markedForReview ? 'Question marked for review' : 'Review mark removed', 'ok');
+    }
+
+    function saveAndNext() {
+      if (currentQuestionIndex < EXAM_QUESTIONS.length - 1) {
+        renderQuestion(currentQuestionIndex + 1);
+      } else {
+        promptSubmitExam();
+      }
+    }
+
+    function prevQuestion() {
+      if (currentQuestionIndex > 0) {
+        renderQuestion(currentQuestionIndex - 1);
+      }
+    }
+
+    function renderQuestionPalette() {
+      const grid = document.getElementById('questionPaletteGrid');
+      if (!grid) return;
+      grid.innerHTML = '';
+
+      EXAM_QUESTIONS.forEach((q, i) => {
+        const btn = document.createElement('button');
+        btn.innerText = i + 1;
+        btn.className = 'palette-btn';
+
+        if (i === currentQuestionIndex) {
+          btn.classList.add('active');
+        }
+
+        if (q.selected !== null && q.markedForReview) {
+          btn.classList.add('status-review-answered');
+        } else if (q.markedForReview) {
+          btn.classList.add('status-review');
+        } else if (q.selected !== null) {
+          btn.classList.add('status-answered');
+        } else {
+          btn.classList.add('status-unanswered');
+        }
+
+        btn.onclick = () => renderQuestion(i);
+        grid.appendChild(btn);
+      });
+    }
+
+    function promptSubmitExam() {
+      let answered = 0;
+      let review = 0;
+      let unanswered = 0;
+
+      EXAM_QUESTIONS.forEach(q => {
+        if (q.selected !== null) answered++;
+        else unanswered++;
+        if (q.markedForReview) review++;
+      });
+
+      document.getElementById('modalCountAnswered').innerText = answered;
+      document.getElementById('modalCountReview').innerText = review;
+      document.getElementById('modalCountUnanswered').innerText = unanswered;
+
+      openModal('submitExamModal');
+    }
+
+    function confirmFinalSubmit() {
+      closeModal('submitExamModal');
+      showToast('Exam successfully submitted to Where U Elevate servers', 'ok');
+      switchTab(10); // View Results & Reports
+    }
+
+    // --- Feature 7: AI Proctoring Anomaly Feed ---
+    let proctorIncidentsCount = 0;
+
+    function triggerProctorEvent(eventName, details, severity) {
+      proctorIncidentsCount++;
+      document.getElementById('incidentCountBadge').innerText = `${proctorIncidentsCount} Flagged Incidents`;
+
+      const tbody = document.getElementById('proctorEventLogTable');
+      if (proctorIncidentsCount === 1) {
+        tbody.innerHTML = '';
+      }
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString();
+
+      let badgeClass = 'badge-bad';
+      if (severity === 'warn') badgeClass = 'badge-warn';
+      if (severity === 'ok') badgeClass = 'badge-ok';
+
+      const row = document.createElement('tr');
+      row.innerHTML = `
+        <td style="font-family: monospace; font-size: 11px;">${timeStr}</td>
+        <td><strong>${eventName}</strong></td>
+        <td><span class="badge ${badgeClass}">${severity === 'bad' ? 'Critical' : 'Warning'}</span></td>
+        <td style="font-size: 12px; color: var(--ink-secondary);">${details}</td>
+        <td><span class="badge badge-neutral">Logged to Audit</span></td>
+      `;
+
+      tbody.prepend(row);
+      showToast(`Proctor Alert: ${eventName}`, severity);
+
+      // Flash pulse indicator
+      const examPulse = document.getElementById('examLivePulse');
+      if (examPulse) {
+        examPulse.className = 'status-pulse danger';
+        setTimeout(() => {
+          examPulse.className = 'status-pulse';
+        }, 3000);
+      }
+    }
+
+    function clearProctoringLogs() {
+      document.getElementById('proctorEventLogTable').innerHTML = `
+        <tr>
+          <td colspan="5" style="text-align: center; color: var(--ink-muted); padding: 24px;">
+            Audit timeline reset. Proctor sensors actively monitoring.
+          </td>
+        </tr>
+      `;
+      proctorIncidentsCount = 0;
+      document.getElementById('incidentCountBadge').innerText = '0 Flagged Incidents';
+      showToast('Audit log cleared', 'ok');
+    }
+
+    // --- Window Focus Watchdog ---
+    window.addEventListener('blur', () => {
+      if (currentTab === 5) { // Only during exam
+        triggerProctorEvent('Browser Focus Lost', 'Candidate switched tabs or minimized test window.', 'bad');
+      }
+    });
+
+    // --- Feature 8: Admin Dashboard Actions ---
+    function generateNewRandomCode() {
+      const code = 'ELV-' + Math.floor(1000 + Math.random() * 9000);
+      document.getElementById('newExamGeneratedCode').value = code;
+      showToast(`Generated Access Code: ${code}`, 'ok');
+    }
+
+    function saveNewExam() {
+      closeModal('createExamModal');
+      showToast('Assessment successfully created and deployed to catalog', 'ok');
+    }
+
+    function exportExamRoster() {
+      showToast('Exporting candidate registration roster (CSV)', 'ok');
+    }
+
+    // --- Feature 9: Live Monitoring Direct Actions ---
+    function sendCandidateMessage(candId) {
+      showToast(`Direct proctor instruction sent to candidate ${candId}`, 'ok');
+    }
+
+    function forceLockoutCandidate(candId) {
+      if (confirm(`Confirm emergency lockout of candidate ${candId}?`)) {
+        showToast(`Candidate ${candId} session locked for examination review`, 'bad');
+      }
+    }
+
+    // --- Feature 10: Alert Review Modal ---
+    function openAlertReviewModal(candidate, alertType, details) {
+      document.getElementById('alertReviewTitle').innerText = `Review Incident: ${candidate}`;
+      document.getElementById('alertReviewDetails').innerText = `${alertType}: ${details}`;
+      openModal('alertReviewModal');
+    }
+
+    function applyDisqualification() {
+      closeModal('alertReviewModal');
+      showToast('Infraction confirmed. Disqualification logged in proctoring ledger.', 'bad');
+    }
+
+    function filterAlerts(level) {
+      showToast(`Filtering alerts by: ${level}`, 'ok');
+    }
+
+    // --- Feature 11: Results & Reports ---
+    function showScoreReport(title, score) {
+      alert(`Candidate: Anmol Sharma\nAssessment: ${title}\nFinal Score: ${score}/100\nStatus: Qualified\nVerified by: Where U Elevate PB.AI Proctoring Core`);
+    }
+
+    function exportResultsSummary() {
+      showToast('Generating official assessment gradebook export (PDF)', 'ok');
+    }
+
+    // --- Feature 12: Profile & Settings ---
+    function saveProfileChanges() {
+      const name = document.getElementById('profileFullName').value;
+      showToast(`Profile details updated for ${name}`, 'ok');
+    }
+
+    function updatePassword() {
+      showToast('Account credentials and security hash updated successfully', 'ok');
+    }
+
+    // --- Modal Helpers ---
+    function openModal(id) {
+      const m = document.getElementById(id);
+      if (m) m.classList.add('open');
+    }
+
+    function closeModal(id) {
+      const m = document.getElementById(id);
+      if (m) m.classList.remove('open');
+    }
+
+    // --- Toast Notifications ---
+    function showToast(message, type = 'pri') {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = `toast-item toast-${type}`;
+
+      let iconSvg = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="12"></line>
+          <line x1="12" y1="16" x2="12.01" y2="16"></line>
+        </svg>
+      `;
+
+      if (type === 'ok') {
+        iconSvg = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#059669" stroke-width="2">
+            <polyline points="20 6 9 17 4 12"></polyline>
+          </svg>
+        `;
+      } else if (type === 'bad') {
+        iconSvg = `
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2">
+            <circle cx="12" cy="12" r="10"></circle>
+            <line x1="15" y1="9" x2="9" y2="15"></line>
+            <line x1="9" y1="9" x2="15" y2="15"></line>
+          </svg>
+        `;
+      }
+
+      toast.innerHTML = `
+        ${iconSvg}
+        <div style="flex: 1;">${message}</div>
+      `;
+
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transition = 'opacity 0.3s ease';
+        setTimeout(() => toast.remove(), 300);
+      }, 3500);
+    }
+
+    // Initial default render
+    renderQuestion(0);
+    renderQuestionPalette();
+  </script>
+</body>
+</html>
