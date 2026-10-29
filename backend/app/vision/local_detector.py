@@ -29,12 +29,21 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
-# Initialize singleton MediaPipe detector instance
-_mp_face_detection = mp.solutions.face_detection
-_detector_instance = _mp_face_detection.FaceDetection(
-    model_selection=0,           # 0 = short-range model (best for webcams within 2 meters)
-    min_detection_confidence=0.40 # Bounded threshold balancing recall and precision
-)
+import os
+# Initialize singleton MediaPipe detector instance with safe fallback
+_detector_instance = None
+try:
+    _mp_face_detection = getattr(mp, "solutions", None)
+    if _mp_face_detection and hasattr(_mp_face_detection, "face_detection"):
+        _detector_instance = _mp_face_detection.face_detection.FaceDetection(
+            model_selection=0,
+            min_detection_confidence=0.40
+        )
+except Exception:
+    _detector_instance = None
+
+_frontal_cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+_frontal_cascade = cv2.CascadeClassifier(_frontal_cascade_path) if os.path.exists(_frontal_cascade_path) else None
 
 
 def decode_image_frame(image_input: Union[str, np.ndarray]) -> Tuple[Optional[np.ndarray], Optional[str]]:
@@ -164,9 +173,10 @@ def detect_faces_local(image_input: Union[str, np.ndarray]) -> Dict[str, Any]:
             "frame_height": h
         }
 
-    # Execute MediaPipe detection on RGB frame
-    rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-    results = _detector_instance.process(rgb_frame)
+    results = None
+    if _detector_instance is not None:
+        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+        results = _detector_instance.process(rgb_frame)
 
     bounding_boxes: List[Dict[str, int]] = []
     face_count = 0
@@ -176,7 +186,7 @@ def detect_faces_local(image_input: Union[str, np.ndarray]) -> Dict[str, Any]:
     eyes: List[Dict[str, Any]] = []
     landmarks_list: List[Dict[str, Any]] = []
 
-    if results.detections:
+    if results and results.detections:
         face_count = len(results.detections)
         for idx, det in enumerate(results.detections):
             score = float(det.score[0]) if det.score else 0.85

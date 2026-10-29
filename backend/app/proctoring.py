@@ -41,17 +41,9 @@ def compute_biometric_face_signature(
             "vector": []
         }
 
-    # Inter-ocular distance
-    dx_eye = math.hypot(kps[1][0] - kps[0][0], kps[1][1] - kps[0][1]) + 1e-5
-    # Eye-midpoint to nose distance
-    eye_mid = ((kps[0][0] + kps[1][0]) / 2, (kps[0][1] + kps[1][1]) / 2)
-    d_nose = math.hypot(kps[2][0] - eye_mid[0], kps[2][1] - eye_mid[1])
-    # Nose to mouth distance
-    d_mouth = math.hypot(kps[3][0] - kps[2][0], kps[3][1] - kps[2][1])
-
-    # Normalized geometric ratios (scale and translation invariant)
-    ratio_nose = d_nose / dx_eye
-    ratio_mouth = d_mouth / dx_eye
+from app.vision.local_detector import detect_faces_local
+from app.vision.temporal_tracker import global_temporal_tracker
+from app.vision.vlm_service import global_vlm_service
 
     return {
         "face_id": f"FID-{uuid.uuid4().hex[:8].upper()}",

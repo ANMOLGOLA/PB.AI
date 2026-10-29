@@ -10,9 +10,11 @@ from app.routes.health import router as health_router
 from app.routes.exams import router as exams_router
 from app.routes.sessions import router as sessions_router
 
-# Path to compiled desktop renderer bundle
-PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
-RENDERER_DIST = PROJECT_ROOT / "apps" / "desktop" / "dist" / "renderer"
+# Path to compiled desktop/web renderer bundle
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
+RENDERER_DIST = PROJECT_ROOT / "frontend" / "dist" / "renderer"
+if not RENDERER_DIST.exists():
+    RENDERER_DIST = PROJECT_ROOT / "apps" / "desktop" / "dist" / "renderer"
 
 
 @asynccontextmanager
