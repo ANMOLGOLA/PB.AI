@@ -28,6 +28,7 @@ export interface DesktopCaptureSource {
 
 export interface SentinelBridge {
   getSystemInfo: () => Promise<SystemInfo>;
+  getWebviewPreloadPath: () => Promise<string>;
   setFullscreen: (enable: boolean) => Promise<boolean>;
   isFullScreen: () => Promise<boolean>;
   getScreenSources: () => Promise<DesktopCaptureSource[]>;
@@ -41,6 +42,9 @@ export interface SentinelBridge {
 const api: SentinelBridge = {
   getSystemInfo: (): Promise<SystemInfo> => {
     return ipcRenderer.invoke('get-system-info');
+  },
+  getWebviewPreloadPath: (): Promise<string> => {
+    return ipcRenderer.invoke('get-webview-preload-path');
   },
   setFullscreen: (enable: boolean): Promise<boolean> => {
     return ipcRenderer.invoke('set-fullscreen', enable);

@@ -28,6 +28,7 @@ def init_db() -> None:
     """Create all registered database tables if they do not already exist."""
     # Ensure parent directory exists
     settings.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    import app.models  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
     # Lightweight SQLite column schema migration

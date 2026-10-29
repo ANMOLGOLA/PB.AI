@@ -31,8 +31,19 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   // Consecutive anomaly frame counters to prevent false positive flickering
   const gazeAwayCountRef = useRef<number>(0);
   const noFaceCountRef = useRef<number>(0);
+  const multipleFaceCountRef = useRef<number>(0);
   const mismatchCountRef = useRef<number>(0);
   const phoneCountRef = useRef<number>(0);
+  const lastViolationTimeRef = useRef<Record<string, number>>({});
+
+  const emitViolationWithCooldown = useCallback((type: string, message: string, cooldownSec: number = 10) => {
+    const now = Date.now();
+    const last = lastViolationTimeRef.current[type] || 0;
+    if (now - last >= cooldownSec * 1000) {
+      lastViolationTimeRef.current[type] = now;
+      onViolation?.(type, message);
+    }
+  }, [onViolation]);
 
   const [analysis, setAnalysis] = useState<AnalyzeFrameResult>({
     face_detected: true,
@@ -97,7 +108,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     };
   }, [webcamStream]);
 
-  // Frame capture and deep-learning MediaPipe + Eye Tracking face analysis
+  // Frame capture and deep-learning MediaPipe head pose & face analysis
   const captureAndAnalyze = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || !streamActive || isProcessing) return;
 
@@ -120,27 +131,33 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       const result = await analyzeFrame(backendUrl, dataUrl, sessionId);
       setAnalysis(result);
 
-      // 1. No Face Check (Requires 3 consecutive frames ~2.4s)
+      // 1. No Face Check (Requires 5 consecutive frames ~6.0s)
       if (result.status === 'no_face' || result.face_count === 0) {
         noFaceCountRef.current += 1;
-        if (noFaceCountRef.current >= 3) {
-          onViolation?.('NO_FACE_DETECTED', 'Candidate face is not detected in camera frame.');
+        if (noFaceCountRef.current >= 5) {
+          emitViolationWithCooldown('NO_FACE_DETECTED', 'Candidate face is not detected in camera frame.', 12);
           noFaceCountRef.current = 0;
         }
       } else {
         noFaceCountRef.current = 0;
       }
 
-      // 2. Multiple Faces Check (Immediate trigger)
+      // 2. Multiple Faces Check (Requires 4 consecutive frames ~4.8s to eliminate transient false positives)
       if (result.status === 'multiple_faces' || result.face_count > 1) {
-        onViolation?.('MULTIPLE_FACES_DETECTED', `Multiple individuals (${result.face_count} faces) detected in proctoring feed.`);
+        multipleFaceCountRef.current += 1;
+        if (multipleFaceCountRef.current >= 4) {
+          emitViolationWithCooldown('MULTIPLE_FACES_DETECTED', `Multiple individuals (${result.face_count} faces) detected in proctoring feed.`, 12);
+          multipleFaceCountRef.current = 0;
+        }
+      } else {
+        multipleFaceCountRef.current = 0;
       }
 
-      // 3. Eye Gaze Tracking (Dampened sensitivity: Requires 4 consecutive frames ~3.2s sustained gaze away)
+      // 3. Sustained Head Turn Detection (Requires 6 consecutive frames ~7.2s sustained head turn away)
       if (!result.looking_at_screen && result.face_count === 1) {
         gazeAwayCountRef.current += 1;
-        if (gazeAwayCountRef.current >= 4) {
-          onViolation?.('GAZE_AWAY_FROM_SCREEN', `Candidate looking away from screen (${result.gaze_direction}).`);
+        if (gazeAwayCountRef.current >= 6) {
+          emitViolationWithCooldown('SUSTAINED_HEAD_TURN', `Candidate head turned away from screen (${result.gaze_direction}).`, 12);
           gazeAwayCountRef.current = 0;
         }
       } else if (result.looking_at_screen) {
@@ -150,8 +167,8 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       // 4. Biometric Face ID Anti-Impersonation Check
       if (result.status === 'face_mismatch' || result.face_id_match === false) {
         mismatchCountRef.current += 1;
-        if (mismatchCountRef.current >= 2) {
-          onViolation?.('FACE_MISMATCH_IMPERSONATION', 'Biometric Face ID mismatch: Active person does not match enrolled candidate.');
+        if (mismatchCountRef.current >= 4) {
+          emitViolationWithCooldown('FACE_MISMATCH_IMPERSONATION', 'Biometric Face ID mismatch: Active person does not match enrolled candidate.', 15);
           mismatchCountRef.current = 0;
         }
       } else {
@@ -161,8 +178,8 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       // 5. Mobile Phone or Foreign Object Detection
       if (result.phone_detected) {
         phoneCountRef.current += 1;
-        if (phoneCountRef.current >= 2) {
-          onViolation?.('PHONE_OR_DEVICE_DETECTED', 'Unauthorized mobile phone or foreign object detected in camera frame.');
+        if (phoneCountRef.current >= 3) {
+          emitViolationWithCooldown('PHONE_OR_DEVICE_DETECTED', 'Unauthorized mobile phone or foreign object detected in camera frame.', 15);
           phoneCountRef.current = 0;
         }
       } else {
@@ -171,7 +188,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
 
       // 6. Eyewear Check
       if (result.eyewear_detected) {
-        onViolation?.('RESTRICTED_EYEWEAR_DETECTED', 'Tinted eyewear or sunglasses detected covering eyes.');
+        emitViolationWithCooldown('RESTRICTED_EYEWEAR_DETECTED', 'Tinted eyewear or sunglasses detected covering eyes.', 20);
       }
     } catch {
       // Heartbeat retry
@@ -180,10 +197,10 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     }
   }, [backendUrl, sessionId, streamActive, isProcessing, onViolation]);
 
-  // Frame analysis loop every 800ms
+  // Frame analysis loop every 1200ms (balanced real-time responsiveness without UI load)
   useEffect(() => {
     if (!streamActive) return;
-    const interval = setInterval(captureAndAnalyze, 800);
+    const interval = setInterval(captureAndAnalyze, 1200);
     return () => clearInterval(interval);
   }, [streamActive, captureAndAnalyze]);
 
@@ -369,7 +386,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
               fontWeight: 700
             }}
           >
-            <EyeOff size={12} /> Gaze: {analysis.gaze_direction}
+            <EyeOff size={12} /> Head: {analysis.gaze_direction}
           </span>
         )}
         {streamActive && isMultiple && (
@@ -467,7 +484,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                       : isMismatch
                       ? 'Unauthorized Substitute Person'
                       : isGazeAway
-                      ? 'Candidate (Reading Away)'
+                      ? 'Candidate (Head Turned Away)'
                       : 'Candidate (Verified Face ID)'}
                   </div>
                 </div>
@@ -516,7 +533,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
               );
             })}
 
-            {/* Real-time Eye Tracking Reticles */}
+            {/* Real-time Facial Landmark Reticles */}
             {analysis.eyes && analysis.eyes.map((eye, i) => {
               const eyeLeftPct = (1 - eye.x / fw) * 100;
               const eyeTopPct = (eye.y / fh) * 100;
@@ -564,7 +581,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       )}
       {!isMultiple && !isMismatch && !isPhone && isGazeAway && (
         <div style={{ backgroundColor: '#D97706', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
-          Gaze Alert: Looking away from screen ({analysis.gaze_direction}). Please face monitor.
+          Head Pose Alert: Head turned away from screen ({analysis.gaze_direction}). Please face monitor.
         </div>
       )}
       {analysis.eyewear_detected && (

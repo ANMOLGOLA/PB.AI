@@ -57,12 +57,196 @@ export async function createSession(
       face_signature: faceSignature
     })
   });
-  if (!response.ok) throw new Error(`Failed to create exam session: HTTP ${response.status}`);
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Session creation failed: HTTP ${response.status}`);
+  }
   return response.json();
 }
 
 /**
- * Perform pre-exam candidate biometric identity scan and environment phone/device detection.
+ * Validate screen sharing readiness and start examination timer.
+ */
+export async function startAssessmentSession(
+  baseUrl: string,
+  sessionId: string
+): Promise<{ status: string; session_id: string; started_at: string; message: string }> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/start`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Screen sharing verification failed: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Dispatch an OTP code for student identity verification.
+ */
+export async function sendOtp(
+  baseUrl: string,
+  identifier: string
+): Promise<{ status: string; identifier: string; expires_in_seconds: number; dev_otp?: string; message: string }> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/auth/otp/send`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier })
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `OTP dispatch failed: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Verify an entered OTP code for candidate login.
+ */
+export async function verifyOtp(
+  baseUrl: string,
+  identifier: string,
+  otpCode: string
+): Promise<{ status: string; verified: boolean; token: string; candidate_id: string; identifier: string; message: string }> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/auth/otp/verify`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ identifier, otp_code: otpCode })
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `OTP verification failed: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Batch autosave candidate answers with offline sync fallback.
+ */
+export async function batchAutosave(
+  baseUrl: string,
+  sessionId: string,
+  answers: Record<string, string>
+): Promise<{ status: string; saved_count: number; session_id: string }> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/autosave`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers })
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Batch autosave failed: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Record an individual MCQ choice answer.
+ */
+export async function saveAnswer(
+  baseUrl: string,
+  sessionId: string,
+  questionId: string,
+  selectedChoiceId: string
+): Promise<void> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/answers/${questionId}`;
+  const response = await fetch(url, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ selected_choice_id: selectedChoiceId })
+  });
+  if (!response.ok) {
+    throw new Error(`Failed to save answer: HTTP ${response.status}`);
+  }
+}
+
+/**
+ * Retrieve saved answers for an assessment session (supports interruption recovery).
+ */
+export async function fetchAnswers(
+  baseUrl: string,
+  sessionId: string
+): Promise<Record<string, string>> {
+  try {
+    const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/answers`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.answers || {};
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Fetch server-authoritative timer for session.
+ */
+export async function fetchSessionTimer(
+  baseUrl: string,
+  sessionId: string
+): Promise<{ total_seconds: number; elapsed_seconds: number; time_remaining_seconds: number; is_expired: boolean }> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/timer`;
+  const res = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!res.ok) throw new Error(`Timer fetch failed: HTTP ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Log behavioral integrity event to the backend audit log.
+ */
+export async function logEvent(
+  baseUrl: string,
+  sessionId: string,
+  eventType: string,
+  source: string,
+  severity: string = 'info',
+  confidence: number = 1.0,
+  metadata: Record<string, any> = {}
+): Promise<void> {
+  try {
+    const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/events`;
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        event_type: eventType,
+        source,
+        severity,
+        confidence,
+        metadata
+      })
+    });
+  } catch (err) {
+    console.warn('[Telemetry] Event transmission dropped:', err);
+  }
+}
+
+/**
+ * Finalize assessment session and receive scoring summary.
+ */
+export async function submitSession(
+  baseUrl: string,
+  sessionId: string
+): Promise<SubmitSessionResult> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/submit`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { Accept: 'application/json' }
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Submit failed: HTTP ${response.status}`);
+  }
+  return response.json();
+}
+
+/**
+ * Pre-exam biometric face scan.
  */
 export async function scanPreExamFace(
   baseUrl: string,
@@ -78,49 +262,38 @@ export async function scanPreExamFace(
       candidate_id: candidateId
     })
   });
-  if (!response.ok) throw new Error(`Pre-exam biometric scan failed: HTTP ${response.status}`);
-  return response.json();
-}
-
-export const scanPreExamFaceAndEar = scanPreExamFace;
-
-/**
- * Check whether Groq or Gemini Vision engine is configured on backend.
- */
-export async function fetchGroqEngineStatus(baseUrl: string): Promise<{
-  engine: string;
-  model: string;
-  gemini_model?: string;
-  groq_configured: boolean;
-  gemini_configured?: boolean;
-}> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/engine`;
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) return { engine: 'fallback_local', model: 'llama-3.2-11b-vision-preview', groq_configured: false };
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Pre-exam scan failed: HTTP ${response.status}`);
+  }
   return response.json();
 }
 
 /**
- * Configure Groq and/or Gemini API Keys on backend.
+ * Analyze real-time camera frame with MediaPipe vision detector.
  */
-export async function configureGroqEngine(
+export async function analyzeFrame(
   baseUrl: string,
-  apiKey: string,
-  geminiApiKey?: string,
-  model = 'llama-3.2-11b-vision-preview'
-): Promise<{ configured: boolean; engine: string; message: string }> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/engine/configure`;
+  imageBase64: string,
+  sessionId?: string
+): Promise<AnalyzeFrameResult> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/analyze-frame`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, gemini_api_key: geminiApiKey, model })
+    body: JSON.stringify({
+      image_base64: imageBase64,
+      session_id: sessionId
+    })
   });
-  if (!response.ok) throw new Error('Failed to configure vision engine');
+  if (!response.ok) {
+    throw new Error(`Frame analysis failed: HTTP ${response.status}`);
+  }
   return response.json();
 }
 
 /**
- * Unlock a session locked out due to reaching 5 integrity warnings using teacher code.
+ * Unlock session using teacher code.
  */
 export async function unlockWithTeacherCode(
   baseUrl: string,
@@ -141,147 +314,15 @@ export async function unlockWithTeacherCode(
 }
 
 /**
- * Record an MCQ choice answer.
+ * Check proctor engine status.
  */
-export async function saveAnswer(
-  baseUrl: string,
-  sessionId: string,
-  questionId: string,
-  selectedChoiceId: string
-): Promise<void> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/answers/${questionId}`;
-  await fetch(url, {
-    method: 'PUT',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ selected_choice_id: selectedChoiceId })
-  });
-}
-
-/**
- * Retrieve saved answers for an assessment session (supports interruption recovery).
- */
-export async function fetchAnswers(
-  baseUrl: string,
-  sessionId: string
-): Promise<Record<string, string>> {
+export async function fetchGroqEngineStatus(baseUrl: string): Promise<any> {
   try {
-    const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/answers`;
+    const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/engine`;
     const res = await fetch(url, { headers: { Accept: 'application/json' } });
     if (!res.ok) return {};
-    const data = await res.json();
-    return data.answers || {};
-  } catch (err) {
-    console.warn('Failed to load saved answers:', err);
+    return res.json();
+  } catch {
     return {};
   }
-}
-
-/**
- * Log an integrity event (window blur, key blocked, etc.).
- */
-export async function logEvent(
-  baseUrl: string,
-  sessionId: string,
-  eventType: string,
-  source: string,
-  severity: string,
-  confidence = 1.0,
-  metadata: Record<string, unknown> = {}
-): Promise<void> {
-  try {
-    const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/events`;
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        event_type: eventType,
-        source,
-        severity,
-        confidence,
-        metadata
-      })
-    });
-  } catch (err) {
-    console.warn('Failed to log telemetry event:', err);
-  }
-}
-
-/**
- * Send webcam frame to OpenCV / MediaPipe proctoring analyzer.
- */
-export async function analyzeFrame(
-  baseUrl: string,
-  imageBase64: string,
-  sessionId?: string
-): Promise<AnalyzeFrameResult> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/analyze-frame`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      image_base64: imageBase64,
-      session_id: sessionId
-    })
-  });
-  if (!response.ok) throw new Error(`Proctoring frame analysis failed: HTTP ${response.status}`);
-  return response.json();
-}
-
-/**
- * Submit exam session and retrieve score & explainable integrity audit.
- */
-export async function submitSession(
-  baseUrl: string,
-  sessionId: string
-): Promise<SubmitSessionResult> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/submit`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { Accept: 'application/json' }
-  });
-  if (!response.ok) throw new Error(`Exam submission failed: HTTP ${response.status}`);
-  return response.json();
-}
-
-/**
- * Verify pre-exam readiness conditions (Face ID, screen sharing active).
- */
-export async function checkSessionReadiness(
-  baseUrl: string,
-  sessionId: string
-): Promise<{
-  session_id: string;
-  screen_sharing_active: boolean;
-  face_enrolled: boolean;
-  is_ready: boolean;
-  candidate_name: string;
-}> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/readiness`;
-  const response = await fetch(url, { headers: { Accept: 'application/json' } });
-  if (!response.ok) throw new Error(`Readiness check failed: HTTP ${response.status}`);
-  return response.json();
-}
-
-/**
- * Start the assessment officially after mandatory screen sharing is active.
- */
-export async function startAssessmentSession(
-  baseUrl: string,
-  sessionId: string
-): Promise<{
-  status: string;
-  session_id: string;
-  screen_sharing_active: boolean;
-  message: string;
-}> {
-  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/start`;
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' }
-  });
-  if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new Error(errorData.detail || `Start assessment failed: HTTP ${response.status}`);
-  }
-  return response.json();
 }

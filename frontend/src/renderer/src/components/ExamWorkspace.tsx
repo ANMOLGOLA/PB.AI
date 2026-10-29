@@ -15,7 +15,10 @@ import { WebcamProctor } from './WebcamProctor';
 import { ScreenSource } from './ScreenSourcePicker';
 import { ScreenShareState } from '../hooks/useScreenShare';
 import { PublicExam, CandidateSession } from '../api/types';
-import { saveAnswer, fetchAnswers, logEvent, unlockWithTeacherCode } from '../api/client';
+import { saveAnswer, fetchAnswers, logEvent, unlockWithTeacherCode, batchAutosave } from '../api/client';
+import { CheckCircle2, Loader2, RefreshCw } from 'lucide-react';
+import { Globe, BookOpen, Camera } from 'lucide-react';
+import { ManagedBrowserTab } from './ManagedBrowserTab';
 
 interface ExamWorkspaceProps {
   exam: PublicExam;
@@ -49,6 +52,118 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
   const [reviewedQuestions, setReviewedQuestions] = useState<Record<string, boolean>>({});
   const [secondsRemaining, setSecondsRemaining] = useState<number>(exam.duration_minutes * 60);
 
+  // Managed Browsing Tab & Focus Duration Tracking
+  const [activeTab, setActiveTab] = useState<'assessment' | 'research'>('assessment');
+  const [focusLostTs, setFocusLostTs] = useState<number | null>(null);
+  const [researchToast, setResearchToast] = useState<string | null>(null);
+
+  // Offline Answer Queue & Autosave Indicator
+  const [syncStatus, setSyncStatus] = useState<'saved' | 'saving' | 'offline_queued' | 'syncing'>('saved');
+  const [offlineQueue, setOfflineQueue] = useState<Record<string, string>>(() => {
+    try {
+      const stored = localStorage.getItem(`sentinel_offline_queue_${session.id}`);
+      return stored ? JSON.parse(stored) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const persistQueue = (queue: Record<string, string>) => {
+    setOfflineQueue(queue);
+    try {
+      localStorage.setItem(`sentinel_offline_queue_${session.id}`, JSON.stringify(queue));
+    } catch (e) {
+      console.warn('LocalStorage queue write failed:', e);
+    }
+  };
+
+  const syncOfflineQueue = useCallback(async () => {
+    const queue = { ...offlineQueue };
+    const count = Object.keys(queue).length;
+    if (count === 0) return;
+    if (!navigator.onLine) {
+      setSyncStatus('offline_queued');
+      return;
+    }
+
+    setSyncStatus('syncing');
+    try {
+      await batchAutosave(backendUrl, session.id, queue);
+      persistQueue({});
+      setSyncStatus('saved');
+      console.log(`[OfflineQueue] Successfully synced ${count} queued answers.`);
+    } catch (err) {
+      console.warn('[OfflineQueue] Sync retry failed, keeping in queue:', err);
+      setSyncStatus('offline_queued');
+    }
+  }, [backendUrl, session.id, offlineQueue]);
+
+  // Auto-sync on connection restoration
+  useEffect(() => {
+    const handleOnline = () => {
+      console.log('[OfflineQueue] Network online event detected. Initiating auto-sync...');
+      syncOfflineQueue();
+    };
+    window.addEventListener('online', handleOnline);
+
+    const interval = setInterval(() => {
+      if (Object.keys(offlineQueue).length > 0 && navigator.onLine) {
+        syncOfflineQueue();
+      }
+    }, 4000);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      clearInterval(interval);
+    };
+  }, [syncOfflineQueue, offlineQueue]);
+
+  const handleTabSwitch = (tab: 'assessment' | 'research') => {
+    if (tab === activeTab) return;
+    if (tab === 'research') {
+      const now = Date.now();
+      setFocusLostTs(now);
+      logEvent(backendUrl, session.id, 'FOCUS_LOST', 'exam_workspace', 'low', 1.0, {
+        target: 'research_web_tab',
+        from: 'assessment'
+      });
+      setActiveTab('research');
+    } else {
+      const durationMs = focusLostTs ? Date.now() - focusLostTs : 0;
+      logEvent(backendUrl, session.id, 'FOCUS_REGAINED', 'exam_workspace', 'info', 1.0, {
+        duration_ms: durationMs,
+        from: 'research_web_tab'
+      });
+      setFocusLostTs(null);
+      setActiveTab('assessment');
+    }
+  };
+
+  const handleWebviewTelemetry = useCallback((eventType: string, metadata: Record<string, any>) => {
+    let severity = 'info';
+    const activeQ = exam.questions[currentQuestionIndex];
+    const enrichedMeta = {
+      ...metadata,
+      active_question_id: activeQ?.id,
+      active_question_text: activeQ?.text
+    };
+
+    if (eventType === 'EXTERNAL_QUERY_SUBMITTED') {
+      severity = 'medium';
+      setResearchToast(`Query Logged: "${metadata.query ? metadata.query.slice(0, 35) : ''}" on ${metadata.domain}`);
+      setTimeout(() => setResearchToast(null), 4000);
+    } else if (eventType === 'QUERY_CAPTURE_UNAVAILABLE') {
+      severity = 'low';
+      setResearchToast(`Notice: Query capture unavailable on ${metadata.domain}`);
+      setTimeout(() => setResearchToast(null), 3000);
+    } else if (eventType === 'EXTERNAL_DOMAIN_OPENED') {
+      setResearchToast(`Domain Opened: ${metadata.domain}`);
+      setTimeout(() => setResearchToast(null), 3000);
+    }
+
+    logEvent(backendUrl, session.id, eventType, 'sandboxed_webview', severity, 1.0, enrichedMeta);
+  }, [backendUrl, session.id, exam.questions, currentQuestionIndex]);
+
   // Restore saved answers from server on mount (supports recoverable interruptions)
   useEffect(() => {
     fetchAnswers(backendUrl, session.id).then((saved) => {
@@ -61,6 +176,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
   // Background incident counters for security thresholds (hidden from candidate view)
   const [warningCount, setWarningCount] = useState<number>(0);
   const [isLockedOut, setIsLockedOut] = useState<boolean>(false);
+  const [isPipCollapsed, setIsPipCollapsed] = useState<boolean>(false);
   const [teacherCodeInput, setTeacherCodeInput] = useState<string>('');
   const [isUnlocking, setIsUnlocking] = useState<boolean>(false);
   const [unlockError, setUnlockError] = useState<string | null>(null);
@@ -158,11 +274,11 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
     }
   }, [isScreenSharingActive, backendUrl, session.id, screenShareError]);
 
-  // Check 5-warning lockout threshold
+  // Check warning lockout threshold (requires 10 sustained violations to avoid false-positive disruption)
   useEffect(() => {
-    if (warningCount >= 5 && !isLockedOut) {
+    if (warningCount >= 10 && !isLockedOut) {
       setIsLockedOut(true);
-      logEvent(backendUrl, session.id, 'EXAM_LOCKED_OUT_5_WARNINGS', 'lockout_guard', 'critical', 1.0, {
+      logEvent(backendUrl, session.id, 'EXAM_LOCKED_OUT_VIOLATION_THRESHOLD', 'lockout_guard', 'critical', 1.0, {
         total_warnings: warningCount
       });
     }
@@ -177,11 +293,26 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
   // Handle Answer Selection
   const handleSelectChoice = async (questionId: string, choiceId: string) => {
     if (isLockedOut || !isScreenSharingActive) return;
+
     setSelectedAnswers((prev) => ({ ...prev, [questionId]: choiceId }));
+    const newQueue = { ...offlineQueue, [questionId]: choiceId };
+    persistQueue(newQueue);
+
+    if (!navigator.onLine) {
+      setSyncStatus('offline_queued');
+      return;
+    }
+
+    setSyncStatus('saving');
     try {
       await saveAnswer(backendUrl, session.id, questionId, choiceId);
+      const remaining = { ...offlineQueue };
+      delete remaining[questionId];
+      persistQueue(remaining);
+      setSyncStatus(Object.keys(remaining).length > 0 ? 'offline_queued' : 'saved');
     } catch (err) {
-      console.warn('Failed to save answer:', err);
+      console.warn('[Autosave] Network error, answer preserved in offline queue:', err);
+      setSyncStatus('offline_queued');
     }
   };
 
@@ -189,7 +320,11 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
   const handleViolation = useCallback(
     (type: string, message: string) => {
       if (isLockedOut) return;
-      setWarningCount((prev) => prev + 1);
+
+      // Only increment lockout penalty for confirmed high/critical violations
+      if (type === 'MULTIPLE_FACES_DETECTED' || type === 'PHONE_OR_DEVICE_DETECTED' || type === 'FACE_MISMATCH_IMPERSONATION' || type === 'FULLSCREEN_EXIT') {
+        setWarningCount((prev) => prev + 1);
+      }
 
       let severity = 'medium';
       if (type === 'MULTIPLE_FACES_DETECTED' || type === 'PHONE_OR_DEVICE_DETECTED' || type === 'FACE_MISMATCH_IMPERSONATION') {
@@ -250,15 +385,93 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
   const isInteractionDisabled = isLockedOut || !isScreenSharingActive || isSubmitting;
 
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', flexDirection: 'column', backgroundColor: '#F8FAFC' }}>
-      {/* Background Video Proctoring Engine (Runs local MediaPipe gaze/face analysis & event ingestion) */}
-      <WebcamProctor
-        hidden={true}
-        webcamStream={webcamStream}
-        backendUrl={backendUrl}
-        sessionId={session.id}
-        onViolation={handleViolation}
-      />
+    <div
+      style={{
+        minHeight: '100vh',
+        height: activeTab === 'research' ? '100vh' : 'auto',
+        display: 'flex',
+        flexDirection: 'column',
+        backgroundColor: activeTab === 'research' ? '#0F172A' : '#F8FAFC',
+        overflow: activeTab === 'research' ? 'hidden' : 'visible'
+      }}
+    >
+      {/* Floating Picture-in-Picture Candidate Webcam Monitor */}
+      <div
+        style={{
+          position: 'fixed',
+          bottom: '24px',
+          right: '24px',
+          width: isPipCollapsed ? '48px' : '200px',
+          height: isPipCollapsed ? '48px' : 'auto',
+          zIndex: 9999,
+          borderRadius: isPipCollapsed ? '50%' : '10px',
+          overflow: 'hidden',
+          boxShadow: '0 8px 24px rgba(0, 0, 0, 0.55)',
+          border: '2px solid rgba(56, 189, 248, 0.6)',
+          backgroundColor: '#0F172A',
+          transition: 'all 0.25s cubic-bezier(0.16, 1, 0.3, 1)'
+        }}
+      >
+        {!isPipCollapsed ? (
+          <div>
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                padding: '4px 8px',
+                backgroundColor: '#1E293B',
+                borderBottom: '1px solid #334155',
+                fontSize: '0.6875rem',
+                color: '#94A3B8'
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span style={{ width: '6px', height: '6px', borderRadius: '50%', backgroundColor: '#10B981' }} />
+                <span style={{ fontWeight: 600, color: '#F1F5F9' }}>Your Camera</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsPipCollapsed(true)}
+                style={{ background: 'none', border: 'none', color: '#94A3B8', cursor: 'pointer', fontSize: '0.875rem', padding: '0 4px', lineHeight: 1 }}
+                title="Minimize Camera Feed"
+              >
+                &minus;
+              </button>
+            </div>
+            <WebcamProctor
+              compact={true}
+              minimal={true}
+              hidden={false}
+              webcamStream={webcamStream}
+              backendUrl={backendUrl}
+              sessionId={session.id}
+              onViolation={handleViolation}
+            />
+          </div>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsPipCollapsed(false)}
+            style={{
+              width: '100%',
+              height: '100%',
+              background: '#0F172A',
+              border: 'none',
+              cursor: 'pointer',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#38BDF8',
+              borderRadius: '50%'
+            }}
+            title="Expand Camera Feed"
+          >
+            <Camera size={20} />
+          </button>
+        )}
+      </div>
 
       {/* Top Header: Minimal & Focused */}
       <header
@@ -334,6 +547,34 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
 
         {/* Right: Countdown Timer & Submit Button */}
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          {/* Autosave & Offline Queue Indicator */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.75rem', fontWeight: 600 }}>
+            {syncStatus === 'saving' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#60A5FA', backgroundColor: 'rgba(59, 130, 246, 0.12)', padding: '4px 10px', borderRadius: '12px' }}>
+                <Loader2 size={13} className="spinner" />
+                <span>Saving...</span>
+              </span>
+            )}
+            {syncStatus === 'saved' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#34D399', backgroundColor: 'rgba(16, 185, 129, 0.12)', padding: '4px 10px', borderRadius: '12px' }}>
+                <CheckCircle2 size={13} />
+                <span>All changes saved</span>
+              </span>
+            )}
+            {syncStatus === 'syncing' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#60A5FA', backgroundColor: 'rgba(59, 130, 246, 0.12)', padding: '4px 10px', borderRadius: '12px' }}>
+                <RefreshCw size={13} className="spinner" />
+                <span>Syncing offline changes...</span>
+              </span>
+            )}
+            {syncStatus === 'offline_queued' && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', color: '#FBBF24', backgroundColor: 'rgba(245, 158, 11, 0.15)', padding: '4px 10px', borderRadius: '12px', border: '1px solid rgba(245, 158, 11, 0.3)' }} title="Answers saved locally in offline queue. Auto-syncing when internet returns.">
+                <AlertTriangle size={13} />
+                <span>Offline ({Object.keys(offlineQueue).length} queued)</span>
+              </span>
+            )}
+          </div>
+
           <div
             style={{
               display: 'flex',
@@ -384,7 +625,63 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
         </div>
       </header>
 
-      {/* Main Workspace Layout */}
+      {/* Assessment vs Research Tab Switcher */}
+      <div style={{ backgroundColor: '#1E293B', borderBottom: '1px solid #334155', display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '0 32px' }}>
+        <div style={{ display: 'flex', gap: '8px' }}>
+          <button
+            type="button"
+            onClick={() => handleTabSwitch('assessment')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              backgroundColor: activeTab === 'assessment' ? '#0F172A' : 'transparent',
+              color: activeTab === 'assessment' ? '#38BDF8' : '#94A3B8',
+              border: 'none',
+              borderBottom: activeTab === 'assessment' ? '2px solid #38BDF8' : '2px solid transparent',
+              cursor: 'pointer'
+            }}
+          >
+            <BookOpen size={15} />
+            <span>MCQ Assessment</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleTabSwitch('research')}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '10px 18px',
+              fontSize: '0.8125rem',
+              fontWeight: 600,
+              backgroundColor: activeTab === 'research' ? '#0F172A' : 'transparent',
+              color: activeTab === 'research' ? '#38BDF8' : '#94A3B8',
+              border: 'none',
+              borderBottom: activeTab === 'research' ? '2px solid #38BDF8' : '2px solid transparent',
+              cursor: 'pointer'
+            }}
+          >
+            <Globe size={15} />
+            <span>Research & Permitted Web (Google / ChatGPT / Claude)</span>
+          </button>
+        </div>
+        {researchToast && (
+          <div style={{ fontSize: '0.75rem', color: '#93C5FD', backgroundColor: 'rgba(59, 130, 246, 0.15)', padding: '4px 12px', borderRadius: '4px', border: '1px solid rgba(59, 130, 246, 0.3)' }}>
+            {researchToast}
+          </div>
+        )}
+      </div>
+
+      {activeTab === 'research' ? (
+        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 105px)', width: '100%', overflow: 'hidden', backgroundColor: '#0F172A' }}>
+          <ManagedBrowserTab onTelemetryEvent={handleWebviewTelemetry} />
+        </div>
+      ) : (
+      /* Main Workspace Layout */
       <main
         style={{
           flex: 1,
@@ -680,6 +977,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
           </div>
         </div>
       </main>
+      )}
 
       {/* Screen Sharing Interruption Blocker Modal */}
       {!isScreenSharingActive && !isLockedOut && !isExiting && !showExitConfirm && !isSubmitting && (

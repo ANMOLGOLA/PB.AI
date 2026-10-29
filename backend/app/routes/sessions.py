@@ -7,12 +7,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
 from app.config import settings
 from app.database import get_db
-from app.models import Exam, Question, ExamSession, CandidateAnswer, IntegrityEvent
+from app.models import Exam, Question, Choice, ExamSession, CandidateAnswer, IntegrityEvent
 from app.schemas import (
     CreateSessionRequest,
     SessionResponse,
     SaveAnswerRequest,
     AnswerResponse,
+    BatchAutosaveRequest,
+    BatchAutosaveResponse,
+    ServerTimerResponse,
     LogEventRequest,
     EventResponse,
     AnalyzeFrameRequest,
@@ -32,7 +35,8 @@ from app.schemas import (
 from app.proctoring import analyze_camera_frame
 from app.vision.temporal_tracker import global_temporal_tracker
 from app.vision.vlm_service import global_vlm_service
-from app.routes.webrtc import signaling_manager
+from app.routes.webrtc import signaling_manager, dispatch_event_broadcast
+from app.policy import UnifiedEvent, global_policy_engine, calculate_query_question_similarity
 
 router = APIRouter(prefix="/api", tags=["Sessions & Proctoring"])
 
@@ -115,6 +119,50 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="This assessment has already been submitted and finalized."
             )
+
+        # Duplicate-login detection: flag concurrent login if existing session has active connection
+        room = signaling_manager.rooms.get(existing_session.id)
+        has_active_ws = room and (room.candidate_ws is not None)
+        s_time = existing_session.started_at
+        if s_time.tzinfo is None:
+            s_time = s_time.replace(tzinfo=timezone.utc)
+        is_recent_duplicate = (datetime.now(timezone.utc) - s_time).total_seconds() > 30
+
+        if has_active_ws or (existing_session.status == "active" and is_recent_duplicate):
+            dup_event = IntegrityEvent(
+                id=str(uuid.uuid4()),
+                session_id=existing_session.id,
+                event_type="DUPLICATE_LOGIN_DETECTED",
+                occurred_at=datetime.now(timezone.utc),
+                source="session_gateway",
+                severity="high",
+                confidence=1.0,
+                metadata_json=json.dumps({
+                    "message": "Concurrent login or secondary launch detected for active candidate",
+                    "candidate_id": payload.candidate_id,
+                    "candidate_name": payload.candidate_name,
+                    "existing_session_id": existing_session.id
+                })
+            )
+            db.add(dup_event)
+            db.commit()
+
+            try:
+                unified_ev = UnifiedEvent(
+                    id=dup_event.id,
+                    session_id=dup_event.session_id,
+                    ts=dup_event.occurred_at,
+                    type=dup_event.event_type,
+                    severity=dup_event.severity,
+                    confidence=dup_event.confidence,
+                    source=dup_event.source,
+                    metadata=dup_event.metadata_dict
+                )
+                policy_verdict = global_policy_engine.evaluate(db, existing_session.id, unified_ev)
+                dispatch_event_broadcast(existing_session.id, unified_ev.to_dict(), policy_verdict)
+            except Exception:
+                pass
+
         # Reuse existing active or locked session to prevent duplicate active sessions on reload
         return SessionResponse(
             id=existing_session.id,
@@ -522,6 +570,104 @@ def save_answer(
         selected_choice_id=payload.selected_choice_id
     )
 
+@router.post("/sessions/{session_id}/autosave", response_model=BatchAutosaveResponse)
+def batch_autosave_answers(
+    session_id: str,
+    payload: BatchAutosaveRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Batch autosave endpoint for candidate answers.
+    Enables atomic checkpointing to survive unexpected network drops or application reloads.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session or exam_session.status != "active":
+        raise HTTPException(status_code=400, detail="Active exam session not found")
+
+    if exam_session.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Exam session locked due to integrity violations. Contact proctor."
+        )
+
+    saved_count = 0
+    now = datetime.now(timezone.utc)
+
+    valid_questions = {
+        q.id: q for q in db.query(Question).filter(Question.exam_id == exam_session.exam_id).all()
+    }
+    existing_answers = {
+        a.question_id: a for a in db.query(CandidateAnswer).filter(CandidateAnswer.session_id == session_id).all()
+    }
+
+    for question_id, choice_id in payload.answers.items():
+        if question_id not in valid_questions:
+            continue
+
+        choice_valid = db.query(Choice).filter(Choice.id == choice_id, Choice.question_id == question_id).first()
+        if not choice_valid:
+            continue
+
+        if question_id in existing_answers:
+            ans = existing_answers[question_id]
+            ans.selected_choice_id = choice_id
+            ans.saved_at = now
+        else:
+            ans = CandidateAnswer(
+                id=str(uuid.uuid4()),
+                session_id=session_id,
+                question_id=question_id,
+                selected_choice_id=choice_id,
+                saved_at=now
+            )
+            db.add(ans)
+            existing_answers[question_id] = ans
+        saved_count += 1
+
+    db.commit()
+
+    return BatchAutosaveResponse(
+        status="saved",
+        saved_count=saved_count,
+        session_id=session_id
+    )
+
+
+@router.get("/sessions/{session_id}/timer", response_model=ServerTimerResponse)
+def get_session_timer(session_id: str, db: Session = Depends(get_db)):
+    """
+    Server-authoritative timer endpoint.
+    Calculates exact remaining time based on server UTC timestamps, preventing client-side clock tampering.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    exam = db.query(Exam).filter(Exam.id == exam_session.exam_id).first()
+    if not exam:
+        raise HTTPException(status_code=404, detail="Exam not found")
+
+    started_at = exam_session.started_at
+    if started_at.tzinfo is None:
+        started_at = started_at.replace(tzinfo=timezone.utc)
+
+    now = datetime.now(timezone.utc)
+    elapsed_seconds = max(0, int((now - started_at).total_seconds()))
+    total_seconds = exam.duration_minutes * 60
+    time_remaining_seconds = max(0, total_seconds - elapsed_seconds)
+    is_expired = time_remaining_seconds == 0
+
+    return ServerTimerResponse(
+        session_id=session_id,
+        started_at=started_at,
+        duration_minutes=exam.duration_minutes,
+        total_seconds=total_seconds,
+        elapsed_seconds=elapsed_seconds,
+        time_remaining_seconds=time_remaining_seconds,
+        is_expired=is_expired
+    )
+
+
 
 @router.post("/sessions/{session_id}/events", response_model=EventResponse, status_code=status.HTTP_201_CREATED)
 def log_integrity_event(
@@ -577,6 +723,26 @@ def log_integrity_event(
             metadata=recent_events.metadata_dict
         )
 
+    # Phase 7: Evaluate answer-seeking similarity if search query submitted
+    event_meta = dict(payload.metadata or {})
+    event_severity = payload.severity
+    if payload.event_type in ("EXTERNAL_QUERY_SUBMITTED", "QUERY_SUBMITTED", "AI_QUERY"):
+        query_text = event_meta.get("query", "")
+        q_text = event_meta.get("active_question_text") or event_meta.get("question_text")
+
+        if not q_text and event_meta.get("active_question_id"):
+            q_obj = db.query(Question).filter(Question.id == event_meta["active_question_id"]).first()
+            if q_obj:
+                q_text = q_obj.text
+
+        if query_text and q_text:
+            sim_result = calculate_query_question_similarity(query_text, q_text)
+            event_meta["similarity_score"] = sim_result["similarity_score"]
+            event_meta["matched_keywords"] = sim_result["matched_tokens"]
+            if sim_result["is_likely_seeking"]:
+                event_meta["likely_answer_seeking"] = True
+                event_severity = "high"
+
     event_id = explicit_id or str(uuid.uuid4())
     event = IntegrityEvent(
         id=event_id,
@@ -584,13 +750,36 @@ def log_integrity_event(
         event_type=payload.event_type,
         occurred_at=datetime.now(timezone.utc),
         source=payload.source,
-        severity=payload.severity,
+        severity=event_severity,
         confidence=payload.confidence,
-        metadata_json=json.dumps(payload.metadata or {})
+        metadata_json=json.dumps(event_meta)
     )
     db.add(event)
     db.commit()
     db.refresh(event)
+
+    # Phase 2 Policy Engine: Evaluate threshold progression (log -> warn -> auto_submit)
+    unified_ev = UnifiedEvent(
+        id=event.id,
+        session_id=event.session_id,
+        ts=event.occurred_at,
+        type=event.event_type,
+        severity=event.severity,
+        confidence=event.confidence,
+        source=event.source,
+        metadata=event.metadata_dict
+    )
+    policy_verdict = global_policy_engine.evaluate(db, session_id, unified_ev)
+
+    # Auto-submit trigger when violation threshold exceeded
+    if policy_verdict.get("action") == "auto_submit" and exam_session.status != "submitted":
+        try:
+            submit_session(session_id, db)
+        except Exception as exc:
+            pass
+
+    # Stream event & policy update to examiner dashboards and candidate WebSocket
+    dispatch_event_broadcast(session_id, unified_ev.to_dict(), policy_verdict)
 
     return EventResponse(
         id=event.id,
@@ -634,7 +823,7 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
     Real-time Computer Vision proctoring analysis.
     Uses MediaPipe deep-learning BlazeFace to inspect candidate webcam frames for:
       - Face presence & count
-      - Gaze orientation (calibrated for natural reading)
+      - Head pose orientation (yaw, pitch, roll)
       - Dark/tinted sunglasses check
       - Unauthorized mobile phone & foreign device detection
       - Biometric Face ID anti-impersonation verification
@@ -699,7 +888,7 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
         confidence=analysis["confidence"],
         status=analysis["status"],
         bounding_boxes=analysis["bounding_boxes"],
-        gaze_direction=analysis.get("gaze_direction", "CENTER"),
+        gaze_direction=analysis.get("head_direction") or analysis.get("gaze_direction", "CENTER"),
         looking_at_screen=analysis.get("looking_at_screen", True),
         eyes=analysis.get("eyes", []),
         eyewear_detected=analysis.get("eyewear_detected", False),
@@ -873,3 +1062,16 @@ def submit_session(session_id: str, db: Session = Depends(get_db)):
             for e in events
         ]
     )
+
+
+@router.get("/sessions/{session_id}/risk")
+def get_session_risk_score(session_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve real-time explainable risk score and policy threshold status.
+    Provides factor breakdown for proctor review.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    return global_policy_engine.evaluate(db, session_id)

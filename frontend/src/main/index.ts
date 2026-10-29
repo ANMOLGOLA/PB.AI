@@ -114,7 +114,8 @@ function createWindow(): void {
       preload: path.join(__dirname, '../preload/index.js'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true,
+      sandbox: false,
+      webviewTag: true,
       devTools: process.env.NODE_ENV === 'development'
     }
   });
@@ -295,6 +296,10 @@ ipcMain.handle('is-fullscreen', () => {
 });
 
 // Register system info IPC handler
+ipcMain.handle('get-webview-preload-path', () => {
+  return path.join(__dirname, '../preload/webviewPreload.js');
+});
+
 ipcMain.handle('get-system-info', () => {
   return {
     platform: process.platform,

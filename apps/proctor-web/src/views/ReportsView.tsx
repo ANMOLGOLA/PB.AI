@@ -50,6 +50,12 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
       .finally(() => setIsLoading(false));
   }, [selectedSessionId, backendUrl, authCode]);
 
+  const handleDownloadCSV = () => {
+    if (!selectedSessionId) return;
+    const url = `${backendUrl}/api/examiner/sessions/${selectedSessionId}/export.csv?auth_code=${encodeURIComponent(authCode)}`;
+    window.open(url, '_blank');
+  };
+
   const handleDownloadJSON = () => {
     if (!report) return;
     const blob = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
@@ -100,6 +106,15 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
 
         <div style={{ display: 'flex', gap: '10px' }}>
           <button
+            onClick={handleDownloadCSV}
+            disabled={!selectedSessionId}
+            className="btn btn-secondary btn-sm"
+            style={{ display: 'flex', alignItems: 'center', gap: '6px' }}
+          >
+            <Download size={14} />
+            <span>Export CSV</span>
+          </button>
+          <button
             onClick={handleDownloadJSON}
             disabled={!report}
             className="btn btn-secondary btn-sm"
@@ -117,6 +132,68 @@ export const ReportsView: React.FC<ReportsViewProps> = ({
             <Printer size={14} />
             <span>Print Report</span>
           </button>
+        </div>
+      </div>
+
+      {/* Candidate Assessment Results Table */}
+      <div className="panel" style={{ padding: '20px', marginBottom: '24px' }}>
+        <div style={{ fontWeight: 700, fontSize: '0.875rem', color: '#0F172A', marginBottom: '14px' }}>
+          Candidate Assessment Results ({sessions.length})
+        </div>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" style={{ width: '100%', fontSize: '0.8125rem' }}>
+            <thead>
+              <tr style={{ borderBottom: '1px solid #E2E8F0', textAlign: 'left', color: '#64748B' }}>
+                <th style={{ padding: '8px 12px' }}>Candidate</th>
+                <th style={{ padding: '8px 12px' }}>Assessment</th>
+                <th style={{ padding: '8px 12px' }}>Status</th>
+                <th style={{ padding: '8px 12px' }}>Score</th>
+                <th style={{ padding: '8px 12px' }}>Percentage</th>
+                <th style={{ padding: '8px 12px' }}>Action</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sessions.map((s) => (
+                <tr key={s.session_id} style={{ borderBottom: '1px solid #F1F5F9' }}>
+                  <td style={{ padding: '10px 12px' }}>
+                    <div style={{ fontWeight: 600, color: '#0F172A' }}>{s.candidate_name}</div>
+                    <div style={{ color: '#64748B', fontSize: '0.6875rem' }}>{s.candidate_id}</div>
+                  </td>
+                  <td style={{ padding: '10px 12px', color: '#334155' }}>{s.exam_title}</td>
+                  <td style={{ padding: '10px 12px' }}>
+                    <span
+                      className={`status-pill ${
+                        s.status === 'submitted'
+                          ? 'success'
+                          : s.is_locked
+                          ? 'danger'
+                          : 'info'
+                      }`}
+                    >
+                      {s.status.toUpperCase()}
+                    </span>
+                  </td>
+                  <td style={{ padding: '10px 12px', fontWeight: 600 }}>
+                    {s.score !== null ? `${s.score} / ${s.total_questions || '-'}` : 'In Progress'}
+                  </td>
+                  <td style={{ padding: '10px 12px' }}>
+                    {s.score !== null && s.total_questions
+                      ? `${Math.round((s.score / s.total_questions) * 100)}%`
+                      : '-'}
+                  </td>
+                  <td style={{ padding: '10px 12px' }}>
+                    <button
+                      onClick={() => setSelectedSessionId(s.session_id)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ padding: '4px 8px', fontSize: '0.6875rem' }}
+                    >
+                      View Report
+                    </button>
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
 

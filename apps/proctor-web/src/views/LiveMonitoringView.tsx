@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Monitor,
+  Bell,
   Search,
   Users,
   Radio,
@@ -29,6 +30,126 @@ interface LiveMonitoringViewProps {
 }
 
 type StreamStatus = 'idle' | 'connecting' | 'connected' | 'interrupted' | 'stopped';
+
+// --- Risk Progression Timeline Component ---
+interface RiskTimelineChartProps {
+  events: IncidentEventRecord[];
+  currentScore: number;
+}
+
+const RiskTimelineChart: React.FC<RiskTimelineChartProps> = ({ events, currentScore }) => {
+  // Sort events chronologically
+  const sorted = [...events].sort(
+    (a, b) => new Date(a.occurred_at).getTime() - new Date(b.occurred_at).getTime()
+  );
+
+  // Compute cumulative risk steps
+  const points: { x: number; y: number; score: number; label: string; time: string; severity: string }[] = [];
+  const W = 320;
+  const H = 75;
+  const padX = 12;
+  const padY = 8;
+  const chartW = W - padX * 2;
+  const chartH = H - padY * 2;
+
+  // Initial anchor
+  points.push({
+    x: padX,
+    y: padY + chartH,
+    score: 0,
+    label: "Session Start",
+    time: sorted.length > 0 ? new Date(sorted[0].occurred_at).toLocaleTimeString() : "--",
+    severity: "info"
+  });
+
+  let running = 0;
+  sorted.forEach((ev, idx) => {
+    let delta = 5;
+    if (ev.severity === "critical") delta = 30;
+    else if (ev.severity === "high") delta = 20;
+    else if (ev.severity === "medium") delta = 10;
+
+    const meta = (ev.metadata || {}) as Record<string, any>;
+    if (meta.likely_answer_seeking) delta += 15;
+
+    running = Math.min(100, running + delta);
+    const progress = (idx + 1) / sorted.length;
+    const x = padX + progress * chartW;
+    const y = padY + chartH - (running / 100) * chartH;
+
+    points.push({
+      x,
+      y,
+      score: running,
+      label: ev.event_type,
+      time: new Date(ev.occurred_at).toLocaleTimeString(),
+      severity: ev.severity || "info"
+    });
+  });
+
+  // Adjust last point to match actual server risk score if available
+  if (points.length > 1 && currentScore > 0) {
+    const last = points[points.length - 1];
+    last.score = currentScore;
+    last.y = padY + chartH - (currentScore / 100) * chartH;
+  }
+
+  const polylinePoints = points.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(" ");
+  const areaPoints = `${padX},${padY + chartH} ${polylinePoints} ${points[points.length - 1].x.toFixed(1)},${padY + chartH}`;
+
+  const lineColor = currentScore >= 80 ? "#EF4444" : currentScore >= 50 ? "#F59E0B" : "#10B981";
+
+  return (
+    <div style={{ marginBottom: "12px", padding: "10px", backgroundColor: "#FFFFFF", borderRadius: "8px", border: "1px solid #E2E8F0" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+        <span style={{ fontSize: "0.75rem", fontWeight: 700, color: "#0F172A" }}>Risk Trajectory</span>
+        <span style={{ fontSize: "0.6875rem", color: "#64748B" }}>
+          {points.length - 1} telemetry point{points.length === 2 ? "" : "s"}
+        </span>
+      </div>
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: "100%", height: "80px", overflow: "visible" }}>
+        <defs>
+          <linearGradient id="riskGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stopColor={lineColor} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={lineColor} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+
+        {/* Shaded risk zones */}
+        <rect x={padX} y={padY} width={chartW} height={chartH * 0.2} fill="#FEE2E2" opacity="0.3" />
+        <rect x={padX} y={padY + chartH * 0.2} width={chartW} height={chartH * 0.3} fill="#FEF3C7" opacity="0.3" />
+        <rect x={padX} y={padY + chartH * 0.5} width={chartW} height={chartH * 0.5} fill="#D1FAE5" opacity="0.2" />
+
+        {/* Threshold guidelines */}
+        <line x1={padX} y1={padY + chartH * 0.2} x2={padX + chartW} y2={padY + chartH * 0.2} stroke="#FCA5A5" strokeDasharray="2,2" strokeWidth="0.75" />
+        <line x1={padX} y1={padY + chartH * 0.5} x2={padX + chartW} y2={padY + chartH * 0.5} stroke="#FCD34D" strokeDasharray="2,2" strokeWidth="0.75" />
+
+        {/* Risk curve */}
+        <polygon points={areaPoints} fill="url(#riskGrad)" />
+        <polyline points={polylinePoints} fill="none" stroke={lineColor} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+
+        {/* Data points */}
+        {points.map((pt, i) => (
+          <circle
+            key={i}
+            cx={pt.x}
+            cy={pt.y}
+            r={i === points.length - 1 ? 3.5 : 2.5}
+            fill={i === 0 ? "#64748B" : pt.severity === "high" || pt.severity === "critical" ? "#EF4444" : lineColor}
+            stroke="#FFFFFF"
+            strokeWidth="1"
+          >
+            <title>{`${pt.label} (${pt.time}) - Risk: ${pt.score}/100`}</title>
+          </circle>
+        ))}
+
+        {/* Axis labels */}
+        <text x={padX + 2} y={padY + 7} fill="#94A3B8" fontSize="7" fontWeight="600">80</text>
+        <text x={padX + 2} y={padY + chartH * 0.5 - 2} fill="#94A3B8" fontSize="7" fontWeight="600">50</text>
+      </svg>
+    </div>
+  );
+};
 
 export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
   sessions,
@@ -79,6 +200,104 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [showTerminateConfirm, setShowTerminateConfirm] = useState<boolean>(false);
   const [terminateReason, setTerminateReason] = useState<string>('Confirmed unpermitted external communication');
+  const [riskScore, setRiskScore] = useState<any>(null);
+  const [showWarnModal, setShowWarnModal] = useState<boolean>(false);
+  const [warnMessageInput, setWarnMessageInput] = useState<string>('Please focus on your assessment window.');
+
+  const handleConfirmSendWarning = () => {
+    if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
+      wsRef.current.send(JSON.stringify({
+        type: 'candidate_warning',
+        session_id: selectedSessionId,
+        message: warnMessageInput.trim() || 'Please focus on your assessment window.'
+      }));
+      setActionNotice('Warning notification dispatched to student viewport.');
+      setTimeout(() => setActionNotice(null), 3500);
+      setShowWarnModal(false);
+    }
+  };
+
+  const renderEventNarrative = (evt: IncidentEventRecord) => {
+    const meta = (evt.metadata || {}) as Record<string, any>;
+    const etype = evt.event_type;
+
+    if (etype === 'EXTERNAL_DOMAIN_OPENED' || etype === 'DOMAIN_OPENED') {
+      return (
+        <div>
+          <span>Navigated to <strong>{meta.domain || 'External Website'}</strong> in research tab</span>
+          {meta.url && <div style={{ color: '#64748B', fontSize: '0.6875rem' }}>{meta.url}</div>}
+        </div>
+      );
+    }
+    if (etype === 'EXTERNAL_QUERY_SUBMITTED' || etype === 'QUERY_SUBMITTED') {
+      const isSeeking = meta.likely_answer_seeking;
+      const sim = meta.similarity_score ? Math.round(meta.similarity_score * 100) : 0;
+      return (
+        <div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+            <span>Search query on <strong>{meta.domain || 'Engine'}</strong>:</span>
+            {isSeeking && (
+              <span
+                style={{
+                  backgroundColor: '#FEF2F2',
+                  color: '#DC2626',
+                  border: '1px solid #FECACA',
+                  padding: '1px 6px',
+                  borderRadius: '3px',
+                  fontSize: '0.625rem',
+                  fontWeight: 800,
+                  letterSpacing: '0.02em'
+                }}
+              >
+                LIKELY ANSWER-SEEKING ({sim}% MATCH)
+              </span>
+            )}
+          </div>
+          <div style={{ fontStyle: 'italic', color: '#1E293B', backgroundColor: isSeeking ? '#FEF2F2' : '#F8FAFC', border: isSeeking ? '1px solid #FCA5A5' : '1px solid #E2E8F0', padding: '4px 8px', borderRadius: '4px', marginTop: '3px' }}>
+            "{meta.query}"
+          </div>
+          {isSeeking && meta.matched_keywords && meta.matched_keywords.length > 0 && (
+            <div style={{ color: '#991B1B', fontSize: '0.625rem', marginTop: '2px' }}>
+              Matched keywords: <strong>{meta.matched_keywords.join(', ')}</strong>
+            </div>
+          )}
+        </div>
+      );
+    }
+    if (etype === 'DUPLICATE_LOGIN_DETECTED' || etype === 'CONCURRENT_SESSION_DETECTED') {
+      return (
+        <div style={{ color: '#DC2626', fontWeight: 600 }}>
+          Concurrent / Duplicate candidate login attempt detected from secondary browser or client
+        </div>
+      );
+    }
+    if (etype === 'QUERY_CAPTURE_UNAVAILABLE') {
+      return <span>Search attempted on <strong>{meta.domain}</strong> (query text unavailable)</span>;
+    }
+    if (etype === 'FOCUS_LOST') {
+      return <span>Candidate switched away from MCQ assessment workspace</span>;
+    }
+    if (etype === 'FOCUS_REGAINED') {
+      const s = meta.duration_ms ? (meta.duration_ms / 1000).toFixed(1) : '0';
+      return <span>Returned to assessment workspace (away for {s}s)</span>;
+    }
+    if (etype === 'NO_FACE_DETECTED' || etype === 'FACE_ABSENT_SUSTAINED') {
+      return <span>Candidate absent from webcam view</span>;
+    }
+    if (etype === 'MULTIPLE_FACES_DETECTED') {
+      return <span>Multiple faces detected in camera frame</span>;
+    }
+    if (etype === 'SUSTAINED_HEAD_TURN' || etype === 'GAZE_AWAY_FROM_SCREEN') {
+      return <span>Sustained head turn / gaze deviation away from screen</span>;
+    }
+    if (etype === 'PHONE_DETECTED') {
+      return <span>Mobile phone or unauthorized device detected</span>;
+    }
+    if (etype === 'FULLSCREEN_EXIT' || etype === 'WINDOW_BLUR') {
+      return <span>Assessment window focus lost or blurred</span>;
+    }
+    return <span>{etype.replace(/_/g, ' ')}</span>;
+  };
 
   // Filter sessions
   const filteredSessions = sessions.filter((s) => {
@@ -119,6 +338,15 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
 
     let isCleanedUp = false;
     setIsLoadingDetail(true);
+
+    fetch(`${backendUrl}/api/sessions/${selectedSessionId}/risk`)
+      .then(res => res.ok ? res.json() : null)
+      .then(data => {
+        if (!isCleanedUp && data && data.risk_score) {
+          setRiskScore(data.risk_score);
+        }
+      })
+      .catch(() => {});
 
     fetchSessionDetail(backendUrl, selectedSessionId, authCode)
       .then((data) => {
@@ -329,6 +557,16 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
               } else {
                 console.log('[WebRTC Examiner] Queueing ICE candidate (remoteDescription not set yet)');
                 iceCandidateQueueRef.current.push(data.candidate);
+              }
+            } else if (data.type === 'integrity_event') {
+              if (data.event) {
+                setSessionDetail((prev) => {
+                  if (!prev) return prev;
+                  return { ...prev, events: [data.event, ...prev.events] };
+                });
+              }
+              if (data.policy && data.policy.risk_score) {
+                setRiskScore(data.policy.risk_score);
               }
             } else if (data.type === 'stream_stopped') {
               console.log('[WebRTC Examiner] Stream stopped by candidate');
@@ -864,6 +1102,15 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                     ) : null}
 
                     <button
+                      onClick={() => setShowWarnModal(true)}
+                      className="btn btn-secondary btn-sm"
+                      style={{ color: '#D97706', borderColor: '#FDE68A', display: 'flex', alignItems: 'center', gap: '4px' }}
+                    >
+                      <Bell size={13} />
+                      <span>Send Warning</span>
+                    </button>
+
+                    <button
                       onClick={() => setShowTerminateConfirm(true)}
                       className="btn btn-danger btn-sm"
                     >
@@ -872,6 +1119,49 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                     </button>
                   </div>
                 </div>
+
+                {showWarnModal && (
+                  <div
+                    style={{
+                      padding: '14px',
+                      backgroundColor: '#FFFBEB',
+                      border: '1px solid #FDE68A',
+                      borderRadius: 'var(--radius-md)',
+                      fontSize: '0.8125rem',
+                      marginBottom: '10px'
+                    }}
+                  >
+                    <div style={{ fontWeight: 700, color: '#B45309', marginBottom: '6px' }}>
+                      Dispatch Candidate Warning
+                    </div>
+                    <p style={{ color: '#78350F', marginBottom: '8px' }}>
+                      Sends a non-blocking notification banner to the student's exam viewport.
+                    </p>
+                    <input
+                      type="text"
+                      value={warnMessageInput}
+                      onChange={(e) => setWarnMessageInput(e.target.value)}
+                      placeholder="Enter warning text..."
+                      className="form-input"
+                      style={{ marginBottom: '10px' }}
+                    />
+                    <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px' }}>
+                      <button
+                        onClick={() => setShowWarnModal(false)}
+                        className="btn btn-secondary btn-sm"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={handleConfirmSendWarning}
+                        className="btn btn-sm"
+                        style={{ backgroundColor: '#D97706', color: '#FFFFFF', border: 'none' }}
+                      >
+                        Send Warning
+                      </button>
+                    </div>
+                  </div>
+                )}
 
                 {showTerminateConfirm && (
                   <div
@@ -926,8 +1216,59 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                   backgroundColor: 'var(--bg-surface-subtle)'
                 }}
               >
+                {/* Explainable Risk Score Gauge */}
+                {riskScore && (
+                  <div
+                    style={{
+                      padding: '12px',
+                      borderRadius: '8px',
+                      backgroundColor: '#FFFFFF',
+                      border: '1px solid #E2E8F0',
+                      marginBottom: '12px'
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+                      <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0F172A' }}>Explainable Risk Score</span>
+                      <span
+                        className={`status-pill ${
+                          riskScore.risk_level === 'critical' || riskScore.risk_level === 'high'
+                            ? 'danger'
+                            : riskScore.risk_level === 'moderate'
+                            ? 'warning'
+                            : 'success'
+                        }`}
+                      >
+                        {riskScore.risk_level?.toUpperCase()} ({riskScore.overall_score}/100)
+                      </span>
+                    </div>
+
+                    <div style={{ width: '100%', height: '6px', backgroundColor: '#E2E8F0', borderRadius: '3px', overflow: 'hidden', marginBottom: '8px' }}>
+                      <div
+                        style={{
+                          height: '100%',
+                          width: `${riskScore.overall_score}%`,
+                          backgroundColor:
+                            riskScore.overall_score >= 80 ? '#EF4444' : riskScore.overall_score >= 50 ? '#F59E0B' : '#10B981',
+                          transition: 'width 0.3s ease'
+                        }}
+                      />
+                    </div>
+
+                    <div style={{ fontSize: '0.6875rem', color: '#64748B', lineHeight: 1.4 }}>
+                      {riskScore.summary}
+                    </div>
+                  </div>
+                )}
+
+                {sessionDetail && (
+                  <RiskTimelineChart
+                    events={sessionDetail.events || []}
+                    currentScore={riskScore?.overall_score || 0}
+                  />
+                )}
+
                 <div style={{ fontWeight: 700, fontSize: '0.8125rem', color: '#0F172A', marginBottom: '10px' }}>
-                  Candidate Incident Timeline ({sessionDetail?.events.length || 0})
+                  Live Narrative Event Timeline ({sessionDetail?.events.length || 0})
                 </div>
 
                 <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '400px' }}>
@@ -968,7 +1309,10 @@ export const LiveMonitoringView: React.FC<LiveMonitoringViewProps> = ({
                             {new Date(evt.occurred_at).toLocaleTimeString()}
                           </span>
                         </div>
-                        <div style={{ color: '#475569', marginTop: '6px' }}>
+                        <div style={{ color: '#1E293B', marginTop: '6px', fontSize: '0.75rem' }}>
+                          {renderEventNarrative(evt)}
+                        </div>
+                        <div style={{ color: '#64748B', marginTop: '4px', fontSize: '0.6875rem' }}>
                           Source: <span style={{ color: '#0F172A', fontWeight: 500 }}>{evt.source}</span>
                           {evt.confidence && ` &bull; Confidence: ${(evt.confidence * 100).toFixed(0)}%`}
                         </div>

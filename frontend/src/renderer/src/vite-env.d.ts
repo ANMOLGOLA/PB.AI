@@ -8,6 +8,7 @@ interface Window {
       backendUrl: string;
       sandboxEnabled: boolean;
     }>;
+    getWebviewPreloadPath?: () => Promise<string>;
     setFullscreen: (enable: boolean) => Promise<boolean>;
     isFullScreen: () => Promise<boolean>;
     getScreenSources: () => Promise<
@@ -31,4 +32,18 @@ interface Window {
       callback: (payload: { type: string; message: string; timestamp: number }) => void
     ) => () => void;
   };
+}
+
+declare namespace JSX {
+  interface IntrinsicElements {
+    webview: React.DetailedHTMLProps<React.HTMLAttributes<HTMLElement>, HTMLElement> & {
+      src?: string;
+      preload?: string;
+      partition?: string;
+      allowpopups?: string | boolean;
+      webpreferences?: string;
+      style?: React.CSSProperties;
+      ref?: React.Ref<any>;
+    };
+  }
 }

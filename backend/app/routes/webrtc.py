@@ -45,9 +45,47 @@ class SignalingRoom:
 
 
 class SignalingManager:
-    """In-memory coordinator for active WebRTC signaling rooms."""
+    """In-memory coordinator for active WebRTC signaling rooms and live telemetry streaming."""
     def __init__(self):
         self.rooms: Dict[str, SignalingRoom] = {}
+        self.overview_subscribers: List[WebSocket] = []
+
+    async def broadcast_event(self, session_id: str, event_data: dict, policy_data: dict) -> None:
+        payload = {
+            "type": "integrity_event",
+            "session_id": session_id,
+            "event": event_data,
+            "policy": policy_data
+        }
+        room = self.rooms.get(session_id)
+        if room and room.examiner_ws:
+            try:
+                await room.examiner_ws.send_json(payload)
+            except Exception:
+                pass
+
+        action = policy_data.get("action")
+        if action in ("warn", "auto_submit") and room and room.candidate_ws:
+            try:
+                await room.candidate_ws.send_json({
+                    "type": "candidate_warning" if action == "warn" else "auto_submit",
+                    "session_id": session_id,
+                    "action": action,
+                    "message": policy_data.get("warning_message", "Integrity alert"),
+                    "warning_count": policy_data.get("warning_count", 0)
+                })
+            except Exception:
+                pass
+
+        dead_subs = []
+        for ws in self.overview_subscribers:
+            try:
+                await ws.send_json(payload)
+            except Exception:
+                dead_subs.append(ws)
+        for dead in dead_subs:
+            if dead in self.overview_subscribers:
+                self.overview_subscribers.remove(dead)
 
     def get_or_create_room(self, session_id: str) -> SignalingRoom:
         if session_id not in self.rooms:
@@ -71,6 +109,15 @@ class SignalingManager:
 
 
 signaling_manager = SignalingManager()
+
+def dispatch_event_broadcast(session_id: str, event_data: dict, policy_data: dict) -> None:
+    """Helper to trigger asynchronous WebSocket broadcast across active rooms and dashboards."""
+    import asyncio
+    try:
+        loop = asyncio.get_running_loop()
+        loop.create_task(signaling_manager.broadcast_event(session_id, event_data, policy_data))
+    except RuntimeError:
+        pass
 
 
 @router.get("/webrtc/config")
@@ -694,6 +741,16 @@ async def webrtc_signaling_endpoint(
                     # Buffer candidate's ICE candidates until examiner arrives
                     room.candidate_ice_candidates.append(data)
 
+            # C2. Relay Official Warning from Examiner to Candidate
+            elif msg_type == "candidate_warning":
+                if room.candidate_ws:
+                    await room.candidate_ws.send_json({
+                        "type": "candidate_warning",
+                        "session_id": session_id,
+                        "message": data.get("message", "Official integrity warning from proctor."),
+                        "timestamp": datetime.now(timezone.utc).isoformat()
+                    })
+
             # D. Handle Explicit Stop Sharing Signal from Candidate
             elif msg_type == "stop_share":
                 room.is_sharing = False
@@ -755,3 +812,85 @@ async def webrtc_signaling_endpoint(
                 db.commit()
             except Exception:
                 pass
+
+
+@router.websocket("/ws/examiner/overview")
+async def examiner_overview_websocket(
+    websocket: WebSocket,
+    auth_code: str = Query(...)
+):
+    """Global real-time WebSocket event stream for proctor dashboard."""
+    verify_examiner_token(auth_code)
+    await websocket.accept()
+    signaling_manager.overview_subscribers.append(websocket)
+    try:
+        while True:
+            await websocket.receive_text()
+    except WebSocketDisconnect:
+        pass
+    finally:
+        if websocket in signaling_manager.overview_subscribers:
+            signaling_manager.overview_subscribers.remove(websocket)
+
+
+@router.get("/examiner/sessions/{session_id}/export.csv")
+def export_session_csv(
+    session_id: str,
+    auth_code: str = Query(...),
+    db: Session = Depends(get_db)
+):
+    """Export comprehensive assessment audit log in RFC 4180 compliant CSV format."""
+    verify_examiner_token(auth_code)
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    events = (
+        db.query(IntegrityEvent)
+        .filter(IntegrityEvent.session_id == session_id)
+        .order_by(IntegrityEvent.occurred_at.asc())
+        .all()
+    )
+
+    import io
+    import csv
+    from fastapi.responses import Response
+
+    output = io.StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        "Timestamp (UTC)",
+        "Event ID",
+        "Event Type",
+        "Source",
+        "Severity",
+        "Confidence",
+        "Domain",
+        "Query",
+        "Details"
+    ])
+
+    for ev in events:
+        meta = ev.metadata_dict
+        writer.writerow([
+            ev.occurred_at.isoformat() if ev.occurred_at else "",
+            ev.id,
+            ev.event_type,
+            ev.source,
+            ev.severity,
+            ev.confidence,
+            meta.get("domain", ""),
+            meta.get("query", ""),
+            json.dumps(meta)
+        ])
+
+    csv_data = output.getvalue()
+    filename = f"audit_session_{session_id[:8]}.csv"
+
+    return Response(
+        content=csv_data,
+        media_type="text/csv",
+        headers={
+            "Content-Disposition": f"attachment; filename={filename}"
+        }
+    )

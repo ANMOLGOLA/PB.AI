@@ -216,7 +216,7 @@ export const PreExamReadiness: React.FC<PreExamReadinessProps> = ({
             </div>
 
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginTop: '12px', lineHeight: 1.4 }}>
-              Ensure your face is well-lit and directly centered. Background MediaPipe tracking will monitor your gaze throughout the session.
+              Ensure your face is well-lit and directly centered. Background MediaPipe tracking will monitor head orientation throughout the session.
             </p>
           </div>
 

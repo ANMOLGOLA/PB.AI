@@ -65,9 +65,9 @@ class ExamSession(Base):
     candidate_id = Column(String(100), nullable=False)
     status = Column(String(30), default="active", nullable=False)  # "active", "submitted", "locked"
     score = Column(Integer, nullable=True)  # Populated only on submit
-    face_id = Column(String(50), nullable=True)  # Unique biometric enrollment Face ID (e.g., FID-7A39-E401)
-    face_signature = Column(Text, nullable=True)  # Base64/JSON biometric landmark signature
-    is_locked = Column(Integer, default=0, nullable=False)  # 1 when candidate reaches 5 violations
+    face_id = Column(String(50), nullable=True)  # Unique biometric enrollment Face ID
+    face_signature = Column(Text, nullable=True)  # Biometric landmark signature
+    is_locked = Column(Integer, default=0, nullable=False)  # 1 when candidate reaches violation threshold
     started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     submitted_at = Column(DateTime, nullable=True)
 
@@ -93,15 +93,15 @@ class IntegrityEvent(Base):
 
     id = Column(String(36), primary_key=True, index=True)
     session_id = Column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
-    event_type = Column(String(50), nullable=False)  # "WINDOW_BLUR", "NO_FACE_DETECTED", "MULTIPLE_FACES_DETECTED", "FULLSCREEN_EXIT", "GAZE_AWAY_FROM_SCREEN", "EARPIECE_DETECTED", "FACE_MISMATCH_IMPERSONATION"
+    event_type = Column(String(50), nullable=False)
     occurred_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    source = Column(String(50), nullable=False)  # "electron_main", "opencv_cv_engine", "web_telemetry", "mediapipe_biometrics"
-    severity = Column(String(20), nullable=False)  # "info", "low", "medium", "high", "critical"
+    source = Column(String(50), nullable=False)
+    severity = Column(String(20), nullable=False)
     confidence = Column(Float, nullable=False, default=1.0)
     metadata_json = Column(Text, default="{}")
 
     # Proctor Review Audit Fields
-    review_status = Column(String(30), default="unreviewed", nullable=False)  # "unreviewed", "reviewed", "dismissed", "escalated"
+    review_status = Column(String(30), default="unreviewed", nullable=False)
     review_notes = Column(Text, nullable=True)
     reviewed_by = Column(String(100), nullable=True)
     reviewed_at = Column(DateTime, nullable=True)
@@ -114,3 +114,15 @@ class IntegrityEvent(Base):
             return json.loads(self.metadata_json or "{}")
         except Exception:
             return {}
+
+
+class OTPVerification(Base):
+    __tablename__ = "otp_verifications"
+
+    id = Column(String(36), primary_key=True, index=True)
+    identifier = Column(String(255), nullable=False, index=True)  # Email or Phone
+    otp_code = Column(String(12), nullable=False)
+    attempts_left = Column(Integer, nullable=False, default=3)
+    expires_at = Column(DateTime, nullable=False)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    is_verified = Column(Integer, default=0, nullable=False)
