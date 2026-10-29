@@ -3,15 +3,16 @@ import path from 'path';
 import { setupSecurityPolicies } from './security';
 
 let mainWindow: BrowserWindow | null = null;
+let isExamLocked = false;
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 1200,
-    height: 820,
+    width: 1280,
+    height: 840,
     minWidth: 960,
     minHeight: 640,
     backgroundColor: '#F5F4F0',
-    title: 'Sentinel Exam',
+    title: 'Sentinel Exam — Secure Assessment Browser',
     show: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -37,6 +38,36 @@ function createWindow(): void {
       focused: true,
       timestamp: Date.now()
     });
+  });
+
+  mainWindow.on('enter-full-screen', () => {
+    mainWindow?.webContents.send('fullscreen-change', { isFullScreen: true });
+  });
+
+  mainWindow.on('leave-full-screen', () => {
+    mainWindow?.webContents.send('fullscreen-change', { isFullScreen: false });
+    if (isExamLocked) {
+      mainWindow?.webContents.send('security-alert', {
+        type: 'FULLSCREEN_EXIT_ATTEMPT',
+        message: 'Candidate exited mandatory fullscreen lockdown.',
+        timestamp: Date.now()
+      });
+    }
+  });
+
+  // Prevent bypass keystrokes in lockdown mode
+  mainWindow.webContents.on('before-input-event', (event, input) => {
+    if (isExamLocked) {
+      // Catch escape or F11 attempting to drop fullscreen
+      if (input.key === 'F11' || input.key === 'Escape') {
+        event.preventDefault();
+        mainWindow?.webContents.send('security-alert', {
+          type: 'LOCKDOWN_KEY_BLOCKED',
+          message: `Blocked restricted keypress: ${input.key}`,
+          timestamp: Date.now()
+        });
+      }
+    }
   });
 
   mainWindow.webContents.on('did-finish-load', () => {
@@ -69,7 +100,26 @@ function createWindow(): void {
   });
 }
 
-// Register minimal read-only IPC handler
+// Fullscreen & Kiosk Lock IPC Handlers
+ipcMain.handle('set-fullscreen', (_event, enable: boolean) => {
+  if (mainWindow) {
+    isExamLocked = enable;
+    mainWindow.setFullScreen(enable);
+    if (enable) {
+      mainWindow.setAlwaysOnTop(true, 'screen-saver');
+    } else {
+      mainWindow.setAlwaysOnTop(false);
+    }
+    return mainWindow.isFullScreen();
+  }
+  return false;
+});
+
+ipcMain.handle('is-fullscreen', () => {
+  return mainWindow ? mainWindow.isFullScreen() : false;
+});
+
+// Register system info IPC handler
 ipcMain.handle('get-system-info', () => {
   return {
     platform: process.platform,

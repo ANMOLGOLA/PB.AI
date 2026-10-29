@@ -8,6 +8,7 @@ from app.database import init_db, SessionLocal
 from app.seed import seed_database
 from app.routes.health import router as health_router
 from app.routes.exams import router as exams_router
+from app.routes.sessions import router as sessions_router
 
 # Path to compiled desktop renderer bundle
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent.parent
@@ -56,6 +57,7 @@ app.add_middleware(
 # API Route registration (registered before static files so API takes precedence)
 app.include_router(health_router)
 app.include_router(exams_router)
+app.include_router(sessions_router)
 
 # Mount renderer static files at root if built, or provide informative status endpoint
 if RENDERER_DIST.exists() and (RENDERER_DIST / "index.html").exists():

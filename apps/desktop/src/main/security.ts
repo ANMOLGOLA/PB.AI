@@ -1,4 +1,4 @@
-import { session, BrowserWindow, shell } from 'electron';
+import { BrowserWindow } from 'electron';
 
 /**
  * Configure comprehensive security boundaries for the Electron process.
@@ -16,7 +16,8 @@ export function setupSecurityPolicies(mainWindow: BrowserWindow): void {
           "connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 ws://127.0.0.1:8000 ws://localhost:8000; " +
           "style-src 'self' 'unsafe-inline'; " +
           "font-src 'self'; " +
-          "img-src 'self' data:; " +
+          "img-src 'self' data: blob:; " +
+          "media-src 'self' blob: mediastream:; " +
           "object-src 'none'; " +
           "base-uri 'self';"
         ]
@@ -27,7 +28,6 @@ export function setupSecurityPolicies(mainWindow: BrowserWindow): void {
   // 2. Deny unauthorized navigation away from the application origin
   mainWindow.webContents.on('will-navigate', (event, navigationUrl) => {
     const parsedUrl = new URL(navigationUrl);
-    // Only allow navigation to localhost/127.0.0.1 in dev or local file protocol in prod
     const isAllowedOrigin =
       parsedUrl.protocol === 'file:' ||
       (parsedUrl.hostname === 'localhost' || parsedUrl.hostname === '127.0.0.1');
@@ -44,11 +44,9 @@ export function setupSecurityPolicies(mainWindow: BrowserWindow): void {
     return { action: 'deny' };
   });
 
-  // 4. Deny unwarranted device and capability permission requests
-  currentSession.setPermissionRequestHandler((webContents, permission, callback) => {
-    // Only camera/media permissions are planned for future proctoring; deny everything else by default
-    const allowedPermissions = ['media'];
-    if (allowedPermissions.includes(permission)) {
+  // 4. Grant webcam media permissions for camera proctoring; deny everything else
+  currentSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    if (permission === 'media') {
       callback(true);
     } else {
       console.warn(`[Security Policy] Denied device permission request: ${permission}`);

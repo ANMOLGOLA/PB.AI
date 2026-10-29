@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
-from sqlalchemy import Column, String, Integer, Text, DateTime, ForeignKey
+import json
+from typing import Any, Dict
+from sqlalchemy import Column, String, Integer, Float, Text, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from app.database import Base
 
@@ -20,6 +22,7 @@ class Exam(Base):
         cascade="all, delete-orphan",
         order_by="Question.question_number"
     )
+    sessions = relationship("ExamSession", back_populates="exam", cascade="all, delete-orphan")
 
 
 class Question(Base):
@@ -51,3 +54,54 @@ class Choice(Base):
     text = Column(Text, nullable=False)
 
     question = relationship("Question", back_populates="choices")
+
+
+class ExamSession(Base):
+    __tablename__ = "sessions"
+
+    id = Column(String(36), primary_key=True, index=True)
+    exam_id = Column(String(36), ForeignKey("exams.id", ondelete="CASCADE"), nullable=False)
+    candidate_name = Column(String(255), nullable=False)
+    candidate_id = Column(String(100), nullable=False)
+    status = Column(String(30), default="active", nullable=False)  # "active", "submitted"
+    score = Column(Integer, nullable=True)  # Populated only on submit
+    started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    submitted_at = Column(DateTime, nullable=True)
+
+    exam = relationship("Exam", back_populates="sessions")
+    answers = relationship("CandidateAnswer", back_populates="session", cascade="all, delete-orphan")
+    events = relationship("IntegrityEvent", back_populates="session", cascade="all, delete-orphan", order_by="IntegrityEvent.occurred_at")
+
+
+class CandidateAnswer(Base):
+    __tablename__ = "candidate_answers"
+
+    id = Column(String(36), primary_key=True, index=True)
+    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    question_id = Column(String(36), ForeignKey("questions.id", ondelete="CASCADE"), nullable=False)
+    selected_choice_id = Column(String(36), nullable=False)
+    saved_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+
+    session = relationship("ExamSession", back_populates="answers")
+
+
+class IntegrityEvent(Base):
+    __tablename__ = "integrity_events"
+
+    id = Column(String(36), primary_key=True, index=True)
+    session_id = Column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
+    event_type = Column(String(50), nullable=False)  # "WINDOW_BLUR", "NO_FACE_DETECTED", "MULTIPLE_FACES_DETECTED", "FULLSCREEN_EXIT"
+    occurred_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
+    source = Column(String(50), nullable=False)  # "electron_main", "opencv_cv_engine", "web_telemetry"
+    severity = Column(String(20), nullable=False)  # "info", "low", "medium", "high", "critical"
+    confidence = Column(Float, nullable=False, default=1.0)
+    metadata_json = Column(Text, default="{}")
+
+    session = relationship("ExamSession", back_populates="events")
+
+    @property
+    def metadata_dict(self) -> Dict[str, Any]:
+        try:
+            return json.loads(self.metadata_json or "{}")
+        except Exception:
+            return {}
