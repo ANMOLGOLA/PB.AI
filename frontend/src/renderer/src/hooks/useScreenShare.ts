@@ -348,6 +348,13 @@ export function useScreenShare({
           setWebcamStream(camStream);
         }
 
+        const effectiveSessionId = targetSessionId || sessionId;
+        if (!effectiveSessionId) {
+          console.log('[WebRTC Candidate] Screen and camera tracks verified locally (awaiting session creation for signaling).');
+          updateState('ready');
+          return;
+        }
+
         // 4. Get ICE Servers Config
         const rtcConfig = await getIceConfig();
 

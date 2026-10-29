@@ -254,7 +254,7 @@ export const App: React.FC = () => {
         screenShareSourceName={screenShareSourceName}
         screenShareError={screenShareError}
         webcamStream={webcamStream}
-        onStartScreenShare={startScreenShare}
+        onStartScreenShare={(source) => handleStartScreenShare(source, webcamStream)}
         onStopScreenShare={stopScreenShare}
         onSubmitExam={handleSubmitExam}
         isSubmitting={isSubmittingExam}
