@@ -6,9 +6,8 @@ interface TestPageProps {
 }
 
 export const TestPage: React.FC<TestPageProps> = ({ onNavigateHome, onLaunchAssessment }) => {
-  const [examCode, setExamCode] = useState<string>('WUE-MCQ-102');
-  const [candidateId, setCandidateId] = useState<string>('STU-2026-8841');
-  const [isReady, setIsReady] = useState<boolean>(true);
+  const [examCode] = useState<string>('WUE-MCQ-102');
+  const [candidateId] = useState<string>('STU-2026-8841');
 
   return (
     <div className="test-page-container">
