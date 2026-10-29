@@ -30,9 +30,15 @@ class Settings:
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_VISION_MODEL: str = os.getenv("GEMINI_VISION_MODEL", "gemini-3.1-flash-lite")
 
-    # Teacher Authorization Code for integrity lockouts
+    # Teacher Authorization Code for integrity lockouts & examiner access
     TEACHER_UNLOCK_CODE: str = os.getenv("SENTINEL_TEACHER_CODE", "TEACHER-UNLOCK-2026")
     ALLOWED_TEACHER_CODES: list = ["TEACHER-UNLOCK-2026", "ELEV8-2026", "778899"]
+
+    # WebRTC Real-Time Screen Sharing STUN/TURN Configuration
+    WEBRTC_STUN_SERVER: str = os.getenv("WEBRTC_STUN_SERVER", "stun:stun.l.google.com:19302")
+    WEBRTC_TURN_SERVER: str = os.getenv("WEBRTC_TURN_SERVER", "")
+    WEBRTC_TURN_USERNAME: str = os.getenv("WEBRTC_TURN_USERNAME", "")
+    WEBRTC_TURN_CREDENTIAL: str = os.getenv("WEBRTC_TURN_CREDENTIAL", "")
 
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:

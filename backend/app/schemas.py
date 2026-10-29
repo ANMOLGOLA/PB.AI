@@ -89,6 +89,10 @@ class EventResponse(BaseModel):
     severity: str
     confidence: float
     metadata: Dict[str, Any]
+    review_status: str = "unreviewed"
+    review_notes: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -198,3 +202,51 @@ class IncidentReviewResponse(BaseModel):
     latency_ms: float = 0.0
     error_message: Optional[str] = None
     unverified_by_examiner: bool = True
+
+
+# --- Dedicated Proctor Dashboard Schemas ---
+
+class ReviewEventDecisionRequest(BaseModel):
+    status: str  # "reviewed", "dismissed", "escalated"
+    reason: Optional[str] = None
+    proctor_id: Optional[str] = "PROCTOR-ADMIN-01"
+
+
+class TerminateSessionRequest(BaseModel):
+    reason: str = "Terminated by proctor for integrity violation"
+    proctor_id: Optional[str] = "PROCTOR-ADMIN-01"
+
+
+class StartSessionResponse(BaseModel):
+    status: str
+    session_id: str
+    screen_sharing_active: bool
+    started_at: datetime
+    message: str
+
+
+class SessionReadinessResponse(BaseModel):
+    session_id: str
+    screen_sharing_active: bool
+    face_enrolled: bool
+    is_ready: bool
+    candidate_name: str
+
+
+class CreateQuestionChoiceInput(BaseModel):
+    choice_letter: str
+    text: str
+    is_correct: bool = False
+
+
+class CreateQuestionInput(BaseModel):
+    question_number: int
+    text: str
+    choices: List[CreateQuestionChoiceInput]
+
+
+class CreateAssessmentRequest(BaseModel):
+    title: str
+    description: str
+    duration_minutes: int = 30
+    questions: Optional[List[CreateQuestionInput]] = None

@@ -1,273 +1,277 @@
-# Sentinel Exam (PB.AI)
+# Sentinel Exam (PB.AI) &times; Where U Elevate
 
-> **Secure assessments. Explainable integrity. Fair evaluation.**
+> **Intelligent, Secure Examination Browser &amp; Live AI Proctoring Platform**  
+> Accelerating Innovation. Elevating Assessments.
 
-### Team Collaboration Guidelines
-1. Everyone shall make their own branches (`git checkout -b <branch-name>`).
-2. No one will push to `main` without consultation and PR review.
-3. Keep the code neat, readable, and typed.
-4. Pull first and then push (`git pull origin <branch>` before pushing).
-
----
-
-## 1. Project Overview & Milestone Scope
-
-This repository contains the **Foundation Milestone** for Sentinel Exam. The objective is an installable, runnable, and verifiable desktop application and backend architecture that future proctoring and assessment features can build upon without structural refactoring.
-
-### Included in this Foundation Milestone:
-- **Electron Desktop Shell**: Chromium sandboxed process with context isolation, strict CSP, and window focus telemetry.
-- **Renderer UI**: React 18 + TypeScript + Vite with an editorial, warm-neutral design system adhering to WCAG AA accessibility standards.
-- **FastAPI Assessment Service**: Python backend with SQLAlchemy ORM, Pydantic validation, and SQLite storage.
-- **Deterministic Seeding**: Idempotent database initialization and seeding of a 5-question technical assessment.
-- **Zero Answer Leakage**: Database models preserve correct answer keys internally while public API schemas rigorously omit them.
-- **Endpoints**: `GET /health` and `GET /api/exams`.
-- **Automated Test Suite**: Unit, integration, idempotency, and recursive answer leakage tests.
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi)](https://fastapi.tiangolo.com)
+[![Electron](https://img.shields.io/badge/Electron-33.x-47848F.svg?logo=electron)](https://www.electronjs.org)
+[![React](https://img.shields.io/badge/React-18.x-61DAFB.svg?logo=react)](https://react.dev)
+[![WebRTC](https://img.shields.io/badge/WebRTC-Live%20Streaming-333333.svg?logo=webrtc)](https://webrtc.org)
+[![Python](https://img.shields.io/badge/Python-3.11+-3776AB.svg?logo=python)](https://www.python.org)
 
 ---
 
-## 2. Architecture & Monorepo Structure
+## Table of Contents
+1. [Overview & Highlights](#1-overview--highlights)
+2. [Ecosystem Architecture](#2-ecosystem-architecture)
+3. [Key Features](#3-key-features)
+4. [Prerequisites](#4-prerequisites)
+5. [Quickstart Guide](#5-quickstart-guide)
+6. [Testing Across Laptops (LAN / Wi-Fi)](#6-testing-across-laptops-lan--wi-fi)
+7. [Student Download & Readiness Portal](#7-student-download--readiness-portal)
+8. [Proctor Web Dashboard](#8-proctor-web-dashboard)
+9. [Automated Verification & Testing](#9-automated-verification--testing)
+10. [API Reference & WebRTC Signaling](#10-api-reference--webrtc-signaling)
+11. [Security & Anti-Cheat Specifications](#11-security--anti-cheat-specifications)
+
+---
+
+## 1. Overview & Highlights
+
+**Sentinel Exam** is a production-grade, secure smart examination browser developed for **Where U Elevate**. It delivers a high-integrity assessment environment combining:
+- **A Candidate Desktop Kiosk (`apps/desktop`)**: Fully locks down the candidate's operating system, prevents application switching and overlay injection, enforces single-candidate gaze/face presence via local MediaPipe computer vision, and automatically transmits full-screen display feeds.
+- **A Remote Examiner Web Dashboard (`apps/proctor-web`)**: A standalone web portal where proctors monitor live video streams (screen share + webcam) in real time over WebRTC, inspect real-time integrity incident logs, and remotely authorize locked sessions.
+- **A High-Performance Backend (`services/api`)**: Built with FastAPI, SQLite/SQLAlchemy, and WebRTC WebSocket signaling gateways with sub-50ms event ingestion and zero-answer-leakage evaluation.
+- **A Candidate Download & Readiness Portal (`/download`)**: A browser-accessible portal allowing candidates to perform pre-flight hardware checks (camera, microphone, screen capture, network ping) and download the client.
+
+---
+
+## 2. Ecosystem Architecture
+
+```
+                                  +-----------------------------------------------+
+                                  |              PROCTOR DASHBOARD                |
+                                  |            (apps/proctor-web)                 |
+                                  |  - Live WebRTC Candidate Screen Stream        |
+                                  |  - Live WebRTC Webcam Stream                  |
+                                  |  - Incident Timeline & Teacher Unlock Code    |
+                                  +-----------------------^-----------------------+
+                                                          | WebRTC Streams & Events
+                                                          | (via WebSocket Gateway)
+                                                          v
++-----------------------------+          +-----------------------------------------------+
+|      STUDENT CANDIDATE      |          |              FASTAPI BACKEND                  |
+|       (apps/desktop)        | <======> |              (services/api)                   |
+| - Kiosk Full-Screen Lockdown|  HTTPS / |  - REST APIs (Exams, Sessions, Submissions)   |
+| - OS Content Protection     |  WebRTC  |  - WebRTC WebSocket Signaling Room Gateway     |
+| - Mandatory Screen Share    |          |  - Temporal Event Ingestion & Incident Engine |
+| - Local MediaPipe CV Engine |          |  - Static Downloads & Readiness Portal (/download)
++-----------------------------+          +-----------------------------------------------+
+```
+
+### Monorepo Structure
 
 ```
 vistarx/
 ├── apps/
-│   └── desktop/                   # Electron + React + TypeScript Desktop Shell
+│   ├── desktop/                         # Electron Desktop Candidate Application
+│   │   ├── src/
+│   │   │   ├── main/                    # Main Process (Kiosk Lockdown, Hotkey Traps, IPC)
+│   │   │   │   ├── index.ts
+│   │   │   │   └── security.ts          # DisplayMediaRequestHandler & CSP
+│   │   │   ├── preload/                 # Secure Context Isolation Bridge
+│   │   │   │   └── index.ts
+│   │   │   └── renderer/                # Sandboxed React 18 Application
+│   │   │       ├── src/
+│   │   │       │   ├── api/             # Typed API & Event Logging Client
+│   │   │       │   ├── components/      # PreExamPortal, ExamWorkspace, Confirmation
+│   │   │       │   ├── hooks/           # useScreenShare (WebRTC Candidate Peer)
+│   │   │       │   └── App.tsx
+│   │   └── package.json
+│   └── proctor-web/                     # Examiner Live Monitoring Web Dashboard
 │       ├── src/
-│       │   ├── main/              # Electron Main Process (Lifecycle, Security, IPC)
-│       │   │   ├── index.ts
-│       │   │   └── security.ts
-│       │   ├── preload/           # Sandboxed Preload Script (ContextBridge)
-│       │   │   └── index.ts
-│       │   └── renderer/          # Sandboxed React Application
-│       │       ├── src/
-│       │       │   ├── api/       # Typed HTTP API Client
-│       │       │   ├── components/# Editorial UI Components
-│       │       │   ├── styles/    # Design Tokens & Warm-Neutral CSS
-│       │       │   ├── App.tsx
-│       │       │   └── main.tsx
-│       │       ├── index.html     # Restrictive CSP Configuration
-│       │       └── vite.config.ts
+│       │   ├── components/              # LiveCandidateMonitor, IncidentTimeline
+│       │   ├── hooks/                   # useExaminerWebRTC (Remote Video Receiver)
+│       │   └── App.tsx
 │       ├── package.json
-│       ├── tsconfig.json          # Renderer TS config
-│       ├── tsconfig.main.json     # Electron Main TS config
-│       └── tsconfig.preload.json  # Electron Preload TS config
+│       └── vite.config.ts
 ├── services/
-│   └── api/                       # FastAPI Assessment Backend
+│   └── api/                             # FastAPI Backend & Signaling Service
 │       ├── app/
-│       │   ├── config.py          # Deterministic DB path & service settings
-│       │   ├── database.py        # SQLAlchemy engine & session dependency
-│       │   ├── main.py            # FastAPI app & CORS configuration
-│       │   ├── models.py          # ORM Models (Exams, Questions, Choices)
-│       │   ├── schemas.py         # Public Pydantic response models
-│       │   ├── seed.py            # Idempotent DB seeder
-│       │   └── routes/
-│       │       ├── health.py      # GET /health
-│       │       └── exams.py       # GET /api/exams
-│       ├── tests/                 # Backend automated test suite
-│       │   ├── conftest.py
-│       │   ├── test_health.py
-│       │   ├── test_exams.py
-│       │   ├── test_seeding.py
-│       │   └── test_security.py   # Recursive answer leakage tests
-│       ├── pyproject.toml
+│       │   ├── database.py              # SQLAlchemy ORM
+│       │   ├── main.py                  # Endpoints & Static Portal Mounting
+│       │   ├── models.py                # Database Schema (Sessions, Events, Answers)
+│       │   ├── schemas.py               # Pydantic Schemas (Zero Answer Leakage)
+│       │   ├── seed.py                  # Idempotent Exam & Question Seeder
+│       │   ├── routes/
+│       │   │   ├── exams.py             # Public Exam Endpoints
+│       │   │   ├── health.py            # Service Health & Ping Check
+│       │   │   ├── sessions.py          # Session Lifecycle & Event Ingestion
+│       │   │   └── webrtc.py            # WebRTC Signaling Gateway & ICE Config
+│       │   └── static/
+│       │       ├── download/            # In-Browser Readiness & Download Portal
+│       │       └── downloads/           # Portable Client ZIP & Batch Launchers
+│       ├── tests/                       # 33 Comprehensive Pytest Test Suites
 │       └── requirements.txt
-├── docs/
-│   ├── api-contract.md            # Detailed REST & WebSocket API specification
-│   └── architecture.md            # System process boundaries & security model
-├── .gitignore
-├── .env.example
-├── package.json                   # Root monorepo workspace scripts
+├── start-exam.bat                       # One-Click Candidate Launcher
+├── package.json                         # Root Workspace Orchestration
 └── README.md
 ```
 
 ---
 
-## 3. Prerequisites
+## 3. Key Features
 
-- **Node.js**: `v20.x` or higher (verified on `v24.14.1`)
-- **npm**: `v10.x` or higher (verified on `v11.11.0`)
-- **Python**: `3.11.x` or higher (verified on `3.11.9`)
-- **Operating System**: Windows, macOS, or Linux
+### For Candidates (Student Portal)
+- **Full-Screen Kiosk Mode**: Window operates borderless with `kiosk: true`, `fullscreen: true`, `skipTaskbar: true`, and `alwaysOnTop: true`.
+- **System Shortcut Interception**: Traps <kbd>Alt</kbd>+<kbd>Tab</kbd>, <kbd>Alt</kbd>+<kbd>F4</kbd>, <kbd>Windows Key</kbd>, <kbd>Escape</kbd>, and DevTools shortcuts.
+- **Continuous Watchdog**: Runs a 150ms focus-reclaim watchdog to prevent OS overlay steal.
+- **Mandatory Entire-Screen Capture**: Automatically enumerates and streams the primary display over WebRTC; pauses exam questions and timer if display sharing is stopped.
+- **Local MediaPipe Vision**: Performs on-device gaze tracking, face presence verification, and secondary face detection with zero cloud latency.
+- **Question Palette & Review**: Allows jumping between questions, marking for review, and viewing remaining answered counts.
+- **Answer Persistence**: In-flight answers are stored continuously on the backend, ensuring zero loss if connection recovers.
+- **Emergency Exit**: Safe Quit button on the portal and emergency hotkey (<kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd>).
+
+### For Examiners (Proctor Web)
+- **Dual Live Feeds**: View candidate's entire display stream and candidate's live webcam feed side-by-side.
+- **Real-Time Incident Stream**: Instant alerts for gaze loss, secondary faces, window blur attempts, or hotkey interruptions.
+- **Session Locking & Recovery**: Automatic exam lockout after critical threshold violations with Teacher Code override (`TEACHER-UNLOCK-2026`).
 
 ---
 
-## 4. Setup & Running Instructions
+## 4. Prerequisites
 
-### Step 1: Install Dependencies
+- **Node.js**: `v18.x` or higher (verified on `v20.x` & `v24.x`)
+- **npm**: `v9.x` or higher
+- **Python**: `3.11.x` or higher
+- **Operating System**: Windows 10/11 (fully supported for Kiosk & Screen Sharing), macOS, or Linux.
 
-From the project root:
+---
 
+## 5. Quickstart Guide
+
+### 1. Install Dependencies
 ```bash
-# Install desktop client dependencies
+# Install root monorepo & workspaces (desktop + proctor-web)
 npm install
 
-# Install backend dependencies (if running in a clean environment)
+# Install Python backend dependencies
 pip install -r services/api/requirements.txt
 ```
 
-### Step 2: Initialize & Seed Database
-
-Seed the SQLite database with the demo examination (5 technical MCQs):
-
+### 2. Seed Database
+Seeds a standard 5-question technical assessment:
 ```bash
 npm run backend:seed
 ```
-*Direct Python alternative:*
+
+### 3. Start Backend & Proctor Servers
+In your primary terminal:
 ```bash
-python services/api/app/seed.py
+# Start FastAPI backend on 0.0.0.0:8000
+python -m uvicorn app.main:app --app-dir services/api --host 0.0.0.0 --port 8000 --reload
 ```
 
-### Step 3: Start the Backend Service
-
-Start the FastAPI assessment server on `http://127.0.0.1:8000`:
-
+In a second terminal:
 ```bash
-npm run backend:run
-```
-*Direct Python alternative:*
-```bash
-python -m uvicorn app.main:app --app-dir services/api --host 127.0.0.1 --port 8000 --reload
+# Start Proctor Web Dashboard on 0.0.0.0:5174
+npm run proctor:dev
 ```
 
-### Step 4: Build & Launch the Desktop Application
-
-In a separate terminal:
-
+### 4. Launch Desktop Assessment Client
 ```bash
-# Build renderer, main, and preload bundles
+# Build desktop renderer & main process
 npm run desktop:build
 
-# Launch the desktop application
+# Launch candidate client
 npx electron apps/desktop
 ```
 
-*Development hot-reload mode:*
-```bash
-# Run Vite renderer dev server
-npm run desktop:dev
-```
+---
+
+## 6. Testing Across Laptops (LAN / Wi-Fi)
+
+To test Sentinel Exam with a friend's laptop acting as the candidate while your laptop acts as the proctor:
+
+1. **Connect both laptops to the same Wi-Fi network**.
+2. **Find your host IP address**:
+   ```powershell
+   Get-NetIPAddress -AddressFamily IPv4 | Where-Object { $_.InterfaceAlias -like "*Wi-Fi*" }
+   ```
+   *(e.g., `172.16.176.193` or `192.168.1.X`)*
+
+3. **On Your Host Laptop**:
+   - Keep the backend running on `0.0.0.0:8000`.
+   - Open the **Proctor Dashboard** in your browser at `http://localhost:5174`.
+
+4. **On Your Friend's Laptop (Candidate)**:
+   - **Method A (Web Download)**: Open Chrome/Edge and navigate to `http://<YOUR_HOST_IP>:8000/download`. Download and double-click `start-exam.bat`.
+   - **Method B (PowerShell)**:
+     ```powershell
+     $env:VITE_API_URL="http://<YOUR_HOST_IP>:8000"
+     npx electron apps/desktop
+     ```
+   - **Method C (In-App Connect)**: If the app starts and is offline, type `http://<YOUR_HOST_IP>:8000` into the server input box on screen and click **Connect**.
 
 ---
 
-## 5. Verification & Test Commands
+## 7. Student Download & Readiness Portal
 
-### Run Backend Automated Tests
-Runs pytest covering health checks, exam schemas, idempotent seeding, and recursive answer leakage inspection:
+The platform includes an automated download and onboarding website accessible by any browser on the network:
+
+**URL**: `http://<YOUR_HOST_IP>:8000/download`
+
+Features:
+- **Interactive Hardware Tests**: Tests candidate's webcam and screen capture directly inside the browser before launching.
+- **Server Ping Indicator**: Measures round-trip HTTP latency to the backend.
+- **Download Packages**: Direct download of `sentinel-exam-client.zip` and `start-exam.bat`.
+
+---
+
+## 8. Proctor Web Dashboard
+
+**URL**: `http://<YOUR_HOST_IP>:5174` (or `http://localhost:5174`)
+
+- **Candidate List**: Displays all active and submitted candidate sessions.
+- **WebRTC Peer Monitor**: Connects to the candidate's WebRTC signaling room and renders live screen and webcam video tracks.
+- **Incident Feed**: Chronological timeline of high-, medium-, and low-severity violations.
+- **Remote Unlock**: Unlocks candidate sessions paused due to excessive warnings using authorization code `TEACHER-UNLOCK-2026`.
+
+---
+
+## 9. Automated Verification & Testing
+
+The repository includes a comprehensive automated test suite verifying security, API contracts, WebRTC signaling, and database isolation.
 
 ```bash
-npm run backend:test
-```
-*Direct command:*
-```bash
+# Run all backend unit & integration tests (33 tests)
 python -m pytest services/api/tests -v
-```
 
-### Run TypeScript & Production Build Checks
-```bash
-# Strict TypeScript check across renderer, main, and preload
+# Run TypeScript compilation checks across all desktop processes
 npm run desktop:check
 
-# Production build test
-npm run desktop:build
+# Run Proctor Dashboard typecheck
+npm run proctor:check
 ```
 
 ---
 
-## 6. API Endpoint Examples
+## 10. API Reference & WebRTC Signaling
 
-### 1. Health Status (`GET /health`)
-```bash
-curl -s http://127.0.0.1:8000/health
-```
-```json
-{
-  "status": "ok",
-  "service": "sentinel-exam-api",
-  "version": "0.1.0",
-  "database": "connected"
-}
-```
-
-### 2. Available Exams (`GET /api/exams`)
-```bash
-curl -s http://127.0.0.1:8000/api/exams
-```
-```json
-[
-  {
-    "id": "e0000000-0000-4000-8000-000000000001",
-    "title": "Systems Engineering & Secure Computing Assessment",
-    "description": "Foundational evaluation of desktop process isolation, network security boundaries, and defensive software architecture.",
-    "duration_minutes": 30,
-    "total_questions": 5,
-    "questions": [
-      {
-        "id": "q0000000-0000-4000-8000-000000000001",
-        "question_number": 1,
-        "text": "In an Electron desktop application architecture, which configuration is mandatory to guarantee that Node.js runtime APIs are completely isolated from the web renderer?",
-        "choices": [
-          {
-            "id": "c0000000-0000-4000-8000-000000000001",
-            "choice_letter": "A",
-            "text": "Set contextIsolation: true and nodeIntegration: false in WebPreferences"
-          },
-          {
-            "id": "c0000000-0000-4000-8000-000000000002",
-            "choice_letter": "B",
-            "text": "Disable webSecurity and enable allowRunningInsecureContent"
-          },
-          {
-            "id": "c0000000-0000-4000-8000-000000000003",
-            "choice_letter": "C",
-            "text": "Enable the remote module and execute scripts in a Web Worker"
-          },
-          {
-            "id": "c0000000-0000-4000-8000-000000000004",
-            "choice_letter": "D",
-            "text": "Set sandbox: false and configure nodeIntegrationInSubFrames: true"
-          }
-        ]
-      }
-    ]
-  }
-]
-```
-
----
-
-## 7. Security Decisions
-
-1. **Process Isolation**: The Electron main process explicitly enforces `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true`. The renderer operates in a standard Chromium sandbox with zero access to Node.js built-ins or the host filesystem.
-2. **Minimal Typed IPC Bridge**: The preload script exposes only `window.sentinelBridge`, restricting renderer communication to platform metadata and focus telemetry. No arbitrary IPC send or invoke capabilities are exposed.
-3. **Restrictive Content Security Policy**: Embedded in both HTTP response headers and `index.html`, prohibiting inline `eval()`, object plugins, and remote untrusted script origins.
-4. **Navigation Locks**: `will-navigate` blocks navigation away from the local application origin, and `setWindowOpenHandler` denies all unauthorized popup window requests.
-5. **Private Answer Keys**: Correct choice IDs reside exclusively in the SQLite database (`Question.correct_choice_id`) and are strictly excluded from public Pydantic schemas. Verified by automated tests that recursively scan responses.
-
----
-
-## 8. Implemented vs. Planned Features
-
-| Feature | Foundation Milestone | Planned Future Milestones |
+| Endpoint | Method | Description |
 |---|---|---|
-| **Desktop Shell** | Implemented (Electron + React 18 + Vite) | Assessment fullscreen lock mode |
-| **Process Security** | Implemented (`contextIsolation`, `sandbox`, CSP) | OS-level application restriction |
-| **Backend REST API** | Implemented (`/health`, `/api/exams`) | Sessions, submissions, and admin routes |
-| **Database & Seeding**| Implemented (SQLite, deterministic 5 MCQs) | Dynamic exam authoring & migrations |
-| **Answer Security** | Implemented (Private DB keys, zero leak) | Cryptographic submission receipts |
-| **Window Telemetry** | Implemented (Focus/blur native events) | Telemetry ingestion endpoint (`/events`) |
-| **Camera Proctoring**| Architectural hooks prepared | OpenCV/MediaPipe face presence detector |
-| **Examiner Dashboard**| Documented in API contract | Real-time review timeline & WebSocket |
+| `/api/health` | `GET` | Health status and database connectivity |
+| `/api/exams` | `GET` | Public exam listing (without answer keys) |
+| `/api/sessions` | `POST` | Create candidate assessment session |
+| `/api/sessions/{id}/start` | `POST` | Enforce readiness gate & begin exam |
+| `/api/sessions/{id}/answers` | `GET` / `POST` | Fetch or persist question answers |
+| `/api/sessions/{id}/submit` | `POST` | Complete and evaluate assessment |
+| `/api/sessions/{id}/events` | `POST` | Ingest proctoring violation telemetry |
+| `/api/webrtc/config` | `GET` | Retrieve STUN/TURN ICE configuration |
+| `/api/webrtc/signal/{id}` | `WebSocket` | Real-time SDP offer/answer/ICE exchange |
+| `/download` | `GET` | Candidate download & pre-flight test portal |
 
 ---
 
-## 9. Troubleshooting
+## 11. Security & Anti-Cheat Specifications
 
-- **Database not found**: The database path is resolved relative to the service directory (`services/api/sentinel_exam.db`). If testing in custom paths, set the `SENTINEL_DB_PATH` environment variable.
-- **Port 8000 in use**: Start uvicorn on another port with `--port 8001` and update `VITE_API_URL=http://127.0.0.1:8001` in your environment or launch flags.
-- **Electron window blank**: Ensure `npm run desktop:build` was executed prior to running `npx electron apps/desktop`.
+1. **OS Content Protection**: Toggles OS-level window protection (`setContentProtection(true)`) so background capture tools cannot invisibly record without authorization.
+2. **Kiosk Lock**: Disables window resizing, movement, minimization, and closure during the active exam phase.
+3. **Zero Answer Key Leakage**: Exam schemas omit `correct_choice_id`. All evaluation occurs server-side upon final submission.
+4. **Sandboxed IPC**: The renderer operates in an isolated context with no direct access to Node.js filesystem, network, or process execution APIs.
+5. **Emergency Safety**: Hotkey <kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Q</kbd> forcefully releases kiosk mode and exits in case of hardware or network freezes.
 
 ---
 
-## 10. Known Limitations
-
-- **Computer Vision Proctoring**: Facial tracking and multi-face signals are planned for future milestones and are intentionally not mocked with fake data in this foundation release.
-- **Assessment Submission**: In accordance with the foundation milestone specifications, answer submission and session lifecycle endpoints are documented in `docs/api-contract.md` but not active.
+**Where U Elevate &bull; Sentinel Exam** &mdash; Built with rigorous security and real-time AI integrity.

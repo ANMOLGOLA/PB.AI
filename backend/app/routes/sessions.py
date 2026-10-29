@@ -25,11 +25,14 @@ from app.schemas import (
     TeacherUnlockResponse,
     SubmitSessionResponse,
     IncidentReviewRequest,
-    IncidentReviewResponse
+    IncidentReviewResponse,
+    StartSessionResponse,
+    SessionReadinessResponse
 )
 from app.proctoring import analyze_camera_frame
 from app.vision.temporal_tracker import global_temporal_tracker
 from app.vision.vlm_service import global_vlm_service
+from app.routes.webrtc import signaling_manager
 
 router = APIRouter(prefix="/api", tags=["Sessions & Proctoring"])
 
@@ -91,10 +94,39 @@ def configure_groq_engine(payload: dict):
 
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db)):
-    """Initialize a monitored examination session for a candidate."""
+    """Initialize a monitored examination session for a candidate, or resume an existing active session."""
     exam = db.query(Exam).filter(Exam.id == payload.exam_id).first()
     if not exam:
         raise HTTPException(status_code=404, detail="Assessment not found")
+
+    # Guard: Check for existing session for this candidate and assessment
+    existing_session = (
+        db.query(ExamSession)
+        .filter(
+            ExamSession.exam_id == payload.exam_id,
+            ExamSession.candidate_id == payload.candidate_id
+        )
+        .order_by(ExamSession.started_at.desc())
+        .first()
+    )
+    if existing_session:
+        if existing_session.status == "submitted":
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="This assessment has already been submitted and finalized."
+            )
+        # Reuse existing active or locked session to prevent duplicate active sessions on reload
+        return SessionResponse(
+            id=existing_session.id,
+            exam_id=existing_session.exam_id,
+            candidate_name=existing_session.candidate_name,
+            candidate_id=existing_session.candidate_id,
+            status=existing_session.status,
+            face_id=existing_session.face_id,
+            is_locked=existing_session.is_locked,
+            started_at=existing_session.started_at,
+            duration_minutes=exam.duration_minutes
+        )
 
     session_id = str(uuid.uuid4())
     exam_session = ExamSession(
@@ -139,6 +171,95 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         is_locked=exam_session.is_locked,
         started_at=exam_session.started_at,
         duration_minutes=exam.duration_minutes
+    )
+
+
+@router.get("/sessions/{session_id}/readiness", response_model=SessionReadinessResponse)
+def check_session_readiness(session_id: str, db: Session = Depends(get_db)):
+    """
+    Validates pre-exam readiness conditions:
+    1. Active session exists and is unlocked.
+    2. Candidate biometric Face ID is enrolled.
+    3. Mandatory WebRTC screen sharing is actively streaming to the backend room.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    room = signaling_manager.rooms.get(session_id)
+    is_sharing = bool(room and room.is_sharing)
+    has_face = bool(exam_session.face_id)
+
+    return SessionReadinessResponse(
+        session_id=session_id,
+        screen_sharing_active=is_sharing,
+        face_enrolled=has_face,
+        is_ready=is_sharing and has_face and not exam_session.is_locked,
+        candidate_name=exam_session.candidate_name
+    )
+
+
+@router.post("/sessions/{session_id}/start", response_model=StartSessionResponse)
+def start_session_assessment(session_id: str, db: Session = Depends(get_db)):
+    """
+    Official start gate for examination assessment.
+    Hard requirement: Mandatory screen sharing must be active before questions can be accessed or exam timer begins.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    if exam_session.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Session is locked. Contact proctor."
+        )
+
+    if exam_session.status == "submitted":
+        raise HTTPException(
+            status_code=400,
+            detail="Session has already been submitted."
+        )
+
+    # Mandatory Screen Sharing Verification
+    room = signaling_manager.rooms.get(session_id)
+    is_sharing = bool(room and room.is_sharing)
+    if not is_sharing:
+        raise HTTPException(
+            status_code=400,
+            detail="Screen sharing is required before starting the assessment. Please share your screen and try again."
+        )
+
+    # Check if EXAM_OFFICIALLY_STARTED event already logged
+    existing_start = (
+        db.query(IntegrityEvent)
+        .filter(IntegrityEvent.session_id == session_id, IntegrityEvent.event_type == "EXAM_OFFICIALLY_STARTED")
+        .first()
+    )
+    if not existing_start:
+        start_event = IntegrityEvent(
+            id=str(uuid.uuid4()),
+            session_id=session_id,
+            event_type="EXAM_OFFICIALLY_STARTED",
+            occurred_at=datetime.now(timezone.utc),
+            source="system_readiness_gate",
+            severity="info",
+            confidence=1.0,
+            metadata_json=json.dumps({
+                "screen_sharing_verified": True,
+                "candidate_name": exam_session.candidate_name,
+                "face_id": exam_session.face_id
+            })
+        )
+        db.add(start_event)
+        db.commit()
+
+    return StartSessionResponse(
+        status="started",
+        session_id=session_id,
+        screen_sharing_active=True,
+        started_at=datetime.now(timezone.utc),
+        message="Assessment officially started with mandatory screen sharing verified."
     )
 
 
@@ -292,6 +413,23 @@ def unlock_session(
     )
 
 
+@router.get("/sessions/{session_id}/answers")
+def get_session_answers(session_id: str, db: Session = Depends(get_db)):
+    """
+    Retrieve candidate's currently saved answers for an assessment session.
+    Allows candidate exam workspace to recover immediately from network interruptions or reloads.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    answers = db.query(CandidateAnswer).filter(CandidateAnswer.session_id == session_id).all()
+    return {
+        "session_id": session_id,
+        "answers": {a.question_id: a.selected_choice_id for a in answers}
+    }
+
+
 @router.put("/sessions/{session_id}/answers/{question_id}", response_model=AnswerResponse)
 def save_answer(
     session_id: str,
@@ -299,7 +437,7 @@ def save_answer(
     payload: SaveAnswerRequest,
     db: Session = Depends(get_db)
 ):
-    """Save or update candidate's selected choice for an MCQ question."""
+    """Save or update candidate's selected choice for an MCQ question with ownership validation."""
     exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
     if not exam_session or exam_session.status != "active":
         raise HTTPException(status_code=400, detail="Active exam session not found")
@@ -309,6 +447,23 @@ def save_answer(
             status_code=status.HTTP_423_LOCKED,
             detail="Exam session locked due to integrity violations. Contact proctor."
         )
+
+    # Validate that question belongs to this exam
+    question = db.query(Question).filter(
+        Question.id == question_id,
+        Question.exam_id == exam_session.exam_id
+    ).first()
+    if not question:
+        raise HTTPException(status_code=400, detail="Invalid question ID for this assessment")
+
+    # Validate that selected choice belongs to this question
+    from app.models import Choice
+    choice = db.query(Choice).filter(
+        Choice.id == payload.selected_choice_id,
+        Choice.question_id == question_id
+    ).first()
+    if not choice:
+        raise HTTPException(status_code=400, detail="Invalid choice ID for this question")
 
     # Check if answer record exists
     answer = db.query(CandidateAnswer).filter(
@@ -588,6 +743,44 @@ def submit_session(session_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail="Exam not found")
 
     questions = db.query(Question).filter(Question.exam_id == exam.id).all()
+
+    # Idempotent return if already submitted: prevents duplicate submission events or state corruption
+    if exam_session.status == "submitted":
+        events = (
+            db.query(IntegrityEvent)
+            .filter(IntegrityEvent.session_id == session_id)
+            .order_by(IntegrityEvent.occurred_at.asc())
+            .all()
+        )
+        summary: dict = {}
+        for ev in events:
+            summary[ev.event_type] = summary.get(ev.event_type, 0) + 1
+        total_q = len(questions) or 1
+        score = exam_session.score if exam_session.score is not None else 0
+        percentage = round((score / total_q) * 100, 1)
+        return SubmitSessionResponse(
+            session_id=session_id,
+            status="submitted",
+            score=score,
+            total_questions=len(questions),
+            percentage=percentage,
+            submitted_at=exam_session.submitted_at or datetime.now(timezone.utc),
+            events_summary=summary,
+            events=[
+                EventResponse(
+                    id=e.id,
+                    session_id=e.session_id,
+                    event_type=e.event_type,
+                    occurred_at=e.occurred_at,
+                    source=e.source,
+                    severity=e.severity,
+                    confidence=e.confidence,
+                    metadata=e.metadata_dict
+                )
+                for e in events
+            ]
+        )
+
     correct_map = {q.id: q.correct_choice_id for q in questions}
 
     answers = db.query(CandidateAnswer).filter(CandidateAnswer.session_id == session_id).all()

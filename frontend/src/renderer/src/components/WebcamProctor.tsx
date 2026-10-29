@@ -8,13 +8,19 @@ interface WebcamProctorProps {
   sessionId?: string;
   onViolation?: (type: string, message: string) => void;
   compact?: boolean;
+  minimal?: boolean;
+  hidden?: boolean;
+  webcamStream?: MediaStream | null;
 }
 
 export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   backendUrl,
   sessionId,
   onViolation,
-  compact = false
+  compact = false,
+  minimal = false,
+  hidden = false,
+  webcamStream = null
 }) => {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
@@ -46,12 +52,23 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     frame_height: 480
   });
 
-  // Start webcam with high quality for reliable face & eye tracking
+  // Start webcam or reuse provided live webcamStream
   useEffect(() => {
+    if (webcamStream && webcamStream.getVideoTracks().length > 0 && webcamStream.getVideoTracks()[0].readyState === 'live') {
+      console.log('[WebcamProctor] Using provided live webcamStream:', webcamStream.id);
+      if (videoRef.current) {
+        videoRef.current.srcObject = webcamStream;
+        videoRef.current.play().catch(console.warn);
+      }
+      setStreamActive(true);
+      setCameraError(null);
+      return;
+    }
+
     let currentStream: MediaStream | null = null;
 
     navigator.mediaDevices
-      .getUserMedia({
+      ?.getUserMedia({
         video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false
       })
@@ -78,7 +95,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         currentStream.getTracks().forEach((track) => track.stop());
       }
     };
-  }, []);
+  }, [webcamStream]);
 
   // Frame capture and deep-learning MediaPipe + Eye Tracking face analysis
   const captureAndAnalyze = useCallback(async () => {
@@ -176,6 +193,94 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   const isGazeAway = !analysis.looking_at_screen && analysis.face_count === 1;
   const isMismatch = analysis.status === 'face_mismatch' || analysis.face_id_match === false;
   const isPhone = !!analysis.phone_detected;
+
+  if (hidden) {
+    return (
+      <div style={{ position: 'fixed', bottom: -9999, left: -9999, width: 1, height: 1, opacity: 0, pointerEvents: 'none' }}>
+        <video ref={videoRef} muted playsInline autoPlay style={{ width: 640, height: 480 }} />
+        <canvas ref={canvasRef} width={640} height={480} />
+      </div>
+    );
+  }
+
+  if (minimal) {
+    return (
+      <div
+        className="card"
+        style={{
+          overflow: 'hidden',
+          borderRadius: 'var(--radius-md)',
+          border: '1px solid var(--color-border)',
+          backgroundColor: '#0F172A',
+          position: 'relative'
+        }}
+      >
+        <div style={{ position: 'relative', width: '100%', height: '130px', backgroundColor: '#0F172A' }}>
+          {cameraError ? (
+            <div
+              style={{
+                padding: '12px',
+                color: '#F87171',
+                fontSize: '0.8125rem',
+                display: 'flex',
+                flexDirection: 'column',
+                alignItems: 'center',
+                justifyContent: 'center',
+                height: '100%',
+                textAlign: 'center'
+              }}
+            >
+              <AlertTriangle size={20} style={{ marginBottom: '6px' }} />
+              <span>{cameraError}</span>
+            </div>
+          ) : (
+            <>
+              <video
+                ref={videoRef}
+                muted
+                playsInline
+                autoPlay
+                style={{
+                  width: '100%',
+                  height: '100%',
+                  objectFit: 'cover',
+                  transform: 'scaleX(-1)'
+                }}
+              />
+              <div
+                style={{
+                  position: 'absolute',
+                  bottom: '6px',
+                  left: '8px',
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                  backdropFilter: 'blur(4px)',
+                  color: '#FFFFFF',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '0.7rem',
+                  fontWeight: 600
+                }}
+              >
+                <span
+                  style={{
+                    width: '6px',
+                    height: '6px',
+                    borderRadius: '50%',
+                    backgroundColor: streamActive ? '#10B981' : '#F59E0B'
+                  }}
+                />
+                <span>Camera Active</span>
+              </div>
+            </>
+          )}
+          <canvas ref={canvasRef} style={{ display: 'none' }} />
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div

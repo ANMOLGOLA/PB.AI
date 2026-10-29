@@ -1,4 +1,4 @@
-import { BrowserWindow } from 'electron';
+import { BrowserWindow, desktopCapturer } from 'electron';
 
 /**
  * Configure comprehensive security boundaries and anti-overlay protection.
@@ -52,13 +52,42 @@ export function setupSecurityPolicies(mainWindow: BrowserWindow): void {
     return { action: 'deny' };
   });
 
-  // 5. Grant webcam media permissions for camera proctoring; deny everything else
+  // 5. Grant webcam media and screen capture permissions for candidate proctoring; deny everything else
+  const allowedPermissions = new Set(['media', 'display-capture', 'camera', 'microphone', 'screen']);
+
   currentSession.setPermissionRequestHandler((_webContents, permission, callback) => {
-    if (permission === 'media') {
+    if (allowedPermissions.has(permission)) {
+      console.log(`[Security Policy] Diagnostic: Camera/Media permission granted for '${permission}'`);
       callback(true);
     } else {
-      console.warn(`[Security Policy] Denied device permission request: ${permission}`);
+      console.warn(`[Security Policy] Diagnostic: Denied device permission request '${permission}'`);
       callback(false);
     }
   });
+
+  if (typeof (currentSession as any).setPermissionCheckHandler === 'function') {
+    (currentSession as any).setPermissionCheckHandler((_webContents: any, permission: string) => {
+      return allowedPermissions.has(permission);
+    });
+  }
+
+  // 6. Handle display media requests for standard navigator.mediaDevices.getDisplayMedia
+  if (typeof (currentSession as any).setDisplayMediaRequestHandler === 'function') {
+    (currentSession as any).setDisplayMediaRequestHandler(async (_request: any, callback: any) => {
+      try {
+        console.log('[Security Policy] setDisplayMediaRequestHandler: Acquiring entire screen sources...');
+        const sources = await desktopCapturer.getSources({ types: ['screen'] });
+        if (sources && sources.length > 0) {
+          console.log('[Security Policy] setDisplayMediaRequestHandler: Selected screen:', sources[0].id, sources[0].name);
+          callback({ video: sources[0] });
+        } else {
+          console.warn('[Security Policy] setDisplayMediaRequestHandler: No screen sources found');
+          callback({});
+        }
+      } catch (err) {
+        console.error('[Security Policy] setDisplayMediaRequestHandler failed:', err);
+        callback({});
+      }
+    });
+  }
 }

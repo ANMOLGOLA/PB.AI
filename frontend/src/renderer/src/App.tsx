@@ -1,13 +1,10 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Header } from './components/Header';
-import { ServiceStatus } from './components/ServiceStatus';
-import { SecuritySignals } from './components/SecuritySignals';
-import { ExamOverview } from './components/ExamOverview';
-import { CandidateOnboarding } from './components/CandidateOnboarding';
-import { ExamRulesPage } from './components/ExamRulesPage';
+import { PreExamPortal } from './components/PreExamPortal';
 import { ExamWorkspace } from './components/ExamWorkspace';
-import { IntegrityAuditReport } from './components/IntegrityAuditReport';
-import { fetchHealth, fetchExams, createSession, submitSession } from './api/client';
+import { SubmissionConfirmation } from './components/SubmissionConfirmation';
+import { useScreenShare } from './hooks/useScreenShare';
+import { fetchHealth, fetchExams, createSession, submitSession, startAssessmentSession } from './api/client';
 import {
   HealthStatus,
   PublicExam,
@@ -15,85 +12,66 @@ import {
   CandidateSession,
   SubmitSessionResult
 } from './api/types';
-import { Play, Camera, Eye, Lock, Sparkles } from 'lucide-react';
+import { ScreenSource } from './components/ScreenSourcePicker';
 
 const resolveInitialApiUrl = (): string => {
-  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) {
-    if (window.location.port === '5173') {
-      return 'http://127.0.0.1:8000';
+  if (typeof window !== 'undefined') {
+    const saved = localStorage.getItem('sentinel_backend_url');
+    if (saved && saved.startsWith('http')) return saved;
+    if (window.location?.origin && window.location.origin.startsWith('http')) {
+      if (window.location.port === '5173') {
+        return 'http://127.0.0.1:8000';
+      }
+      return window.location.origin;
     }
-    return window.location.origin;
   }
   return 'http://127.0.0.1:8000';
 };
 
-type AppMode = 'status' | 'onboarding' | 'rules' | 'exam' | 'report';
+type AppMode = 'portal' | 'exam' | 'submitted';
 
 export const App: React.FC = () => {
   const [backendUrl, setBackendUrl] = useState<string>(resolveInitialApiUrl);
   const [platform, setPlatform] = useState<string>('');
   const [appVersion, setAppVersion] = useState<string>('0.1.0');
-  const [sandboxEnabled, setSandboxEnabled] = useState<boolean>(true);
 
-  const [connectionState, setConnectionState] = useState<ConnectionState>('loading');
-  const [health, setHealth] = useState<HealthStatus | null>(null);
-  const [errorDetail, setErrorDetail] = useState<string | null>(null);
+  const [_connectionState, setConnectionState] = useState<ConnectionState>('loading');
+  const [_health, setHealth] = useState<HealthStatus | null>(null);
+  const [_errorDetail, setErrorDetail] = useState<string | null>(null);
   const [exams, setExams] = useState<PublicExam[]>([]);
-  const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
+  const [_isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Proctoring Workflow State
-  const [mode, setMode] = useState<AppMode>('status');
+  // Student Examination Workflow State: portal -> exam -> submitted
+  const [mode, setMode] = useState<AppMode>('portal');
   const [candidateName, setCandidateName] = useState<string>('Parv Mishra');
   const [candidateId, setCandidateId] = useState<string>('CAND-2026-001');
   const [candidateFaceId, setCandidateFaceId] = useState<string>('');
-  const [candidateFaceSig, setCandidateFaceSig] = useState<string>('');
   const [activeSession, setActiveSession] = useState<CandidateSession | null>(null);
   const [submissionResult, setSubmissionResult] = useState<SubmitSessionResult | null>(null);
   const [isStartingExam, setIsStartingExam] = useState<boolean>(false);
   const [isSubmittingExam, setIsSubmittingExam] = useState<boolean>(false);
 
-  const [isWindowFocused, setIsWindowFocused] = useState<boolean>(true);
-  const [lastFocusEventTime, setLastFocusEventTime] = useState<number | null>(null);
-
-  // Initialize bridge and telemetry listener
+  // Initialize bridge listeners
   useEffect(() => {
     if (window.sentinelBridge) {
       window.sentinelBridge.getSystemInfo().then((info) => {
-        if (info.backendUrl) setBackendUrl(info.backendUrl);
+        const saved = localStorage.getItem('sentinel_backend_url');
+        if (saved) {
+          setBackendUrl(saved);
+        } else if (info.backendUrl && info.backendUrl !== 'http://127.0.0.1:8000') {
+          setBackendUrl(info.backendUrl);
+        }
         if (info.platform) setPlatform(info.platform);
         if (info.appVersion) setAppVersion(info.appVersion);
-        setSandboxEnabled(info.sandboxEnabled);
       }).catch((err) => {
         console.error('Failed to query system bridge:', err);
       });
-
-      const unsubscribe = window.sentinelBridge.onFocusChange(({ focused, timestamp }) => {
-        setIsWindowFocused(focused);
-        setLastFocusEventTime(timestamp);
-      });
-
-      return () => {
-        unsubscribe();
-      };
     } else {
-      setPlatform('Web Browser');
-      const handleBlur = () => {
-        setIsWindowFocused(false);
-        setLastFocusEventTime(Date.now());
-      };
-      const handleFocus = () => {
-        setIsWindowFocused(true);
-        setLastFocusEventTime(Date.now());
-      };
-      window.addEventListener('blur', handleBlur);
-      window.addEventListener('focus', handleFocus);
-      return () => {
-        window.removeEventListener('blur', handleBlur);
-        window.removeEventListener('focus', handleFocus);
-      };
+      setPlatform('Web');
     }
   }, []);
 
+  // Fetch initial exam data
   const checkConnectivity = useCallback(async (targetUrl: string) => {
     setIsRefreshing(true);
     setErrorDetail(null);
@@ -126,31 +104,85 @@ export const App: React.FC = () => {
     checkConnectivity(backendUrl);
   }, [backendUrl, checkConnectivity]);
 
-  // Stage 1: Candidate inputs details -> Moves to Rules
-  const handleProceedToRules = (name: string, id: string, faceId?: string, faceSig?: string) => {
-    setCandidateName(name);
-    setCandidateId(id);
-    if (faceId) setCandidateFaceId(faceId);
-    if (faceSig) setCandidateFaceSig(faceSig);
-    setMode('rules');
-  };
+  // WebRTC Screen Sharing coordinator
+  const {
+    state: screenShareState,
+    sourceName: screenShareSourceName,
+    errorMessage: screenShareError,
+    stream: _screenStream,
+    webcamStream,
+    startSharing: startScreenShare,
+    stopSharing: stopScreenShare
+  } = useScreenShare({
+    backendUrl,
+    sessionId: activeSession?.id || ''
+  });
 
-  // Stage 2: Candidate agrees to all rules -> Enforces mandatory lockdown & starts session
-  const handleLaunchAssessment = async () => {
-    if (exams.length === 0) return;
-    setIsStartingExam(true);
-    try {
+  const [screenShareErrorOverride, setScreenShareErrorOverride] = useState<string | null>(null);
+
+  // Ensure an active session exists on backend before initiating stream
+  const ensureSession = useCallback(
+    async (faceId?: string): Promise<CandidateSession> => {
+      if (activeSession) return activeSession;
+
+      let targetExams = exams;
+      if (targetExams.length === 0) {
+        try {
+          targetExams = await fetchExams(backendUrl);
+          setExams(targetExams);
+        } catch (fetchErr) {
+          console.warn('Could not auto-fetch exams in ensureSession:', fetchErr);
+        }
+      }
+
+      if (targetExams.length === 0) {
+        throw new Error('Assessment backend is unreachable. Ensure the backend is running at http://127.0.0.1:8000.');
+      }
+
       const session = await createSession(
         backendUrl,
-        exams[0].id,
-        candidateName,
-        candidateId,
-        candidateFaceId,
-        candidateFaceSig
+        targetExams[0].id,
+        candidateName.trim(),
+        candidateId.trim(),
+        faceId || candidateFaceId || undefined
       );
       setActiveSession(session);
+      return session;
+    },
+    [activeSession, exams, backendUrl, candidateName, candidateId, candidateFaceId]
+  );
 
-      // Trigger mandatory Electron fullscreen & Kiosk lockdown
+  // Candidate initiates screen sharing from pre-exam portal
+  const handleStartScreenShare = useCallback(
+    async (source: ScreenSource | null = null, cameraStream?: MediaStream | null) => {
+      try {
+        setScreenShareErrorOverride(null);
+        let session = activeSession;
+        if (!session) {
+          session = await ensureSession();
+        }
+        await startScreenShare(source, cameraStream, session.id);
+      } catch (err: any) {
+        console.error('Failed to start screen share:', err);
+        setScreenShareErrorOverride(err.message || 'Failed to initialize screen sharing');
+      }
+    },
+    [activeSession, ensureSession, startScreenShare]
+  );
+
+  // Candidate starts exam after readiness verification
+  const handleStartAssessment = async (faceId?: string) => {
+    if (exams.length === 0) return;
+    setIsStartingExam(true);
+
+    try {
+      if (faceId) setCandidateFaceId(faceId);
+      const session = await ensureSession(faceId);
+
+      // Verify server readiness gate with mandatory screen sharing
+      await startAssessmentSession(backendUrl, session.id);
+
+      // Enter full-screen Kiosk lockdown
       if (window.sentinelBridge) {
         await window.sentinelBridge.setFullscreen(true);
       } else if (document.documentElement.requestFullscreen) {
@@ -163,17 +195,19 @@ export const App: React.FC = () => {
 
       setMode('exam');
     } catch (err) {
-      alert(`Could not start exam session: ${err instanceof Error ? err.message : String(err)}`);
+      alert(`Could not start assessment: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
       setIsStartingExam(false);
     }
   };
 
-  // Stage 3: Submit exam and exit fullscreen
+  // Submit exam and transition to confirmation
   const handleSubmitExam = async () => {
     if (!activeSession) return;
     setIsSubmittingExam(true);
+
     try {
+      await stopScreenShare('Exam completed by candidate');
       const result = await submitSession(backendUrl, activeSession.id);
       setSubmissionResult(result);
 
@@ -184,7 +218,7 @@ export const App: React.FC = () => {
         await document.exitFullscreen().catch(console.warn);
       }
 
-      setMode('report');
+      setMode('submitted');
     } catch (err) {
       alert(`Failed to submit exam: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -199,170 +233,127 @@ export const App: React.FC = () => {
         exam={exams[0]}
         session={activeSession}
         backendUrl={backendUrl}
+        screenShareState={screenShareState}
+        screenShareSourceName={screenShareSourceName}
+        screenShareError={screenShareError}
+        webcamStream={webcamStream}
+        onStartScreenShare={startScreenShare}
+        onStopScreenShare={stopScreenShare}
         onSubmitExam={handleSubmitExam}
         isSubmitting={isSubmittingExam}
       />
     );
   }
 
-  // Render Submission Report View
-  if (mode === 'report' && submissionResult) {
+  // Render Submission Confirmation (clean, no answers/keys/examiner controls)
+  if (mode === 'submitted' && submissionResult && exams.length > 0) {
     return (
       <div className="app-container">
         <Header platform={platform} appVersion={appVersion} />
-        <IntegrityAuditReport
-          result={submissionResult}
-          onReset={() => {
-            setMode('status');
-            setActiveSession(null);
-            setSubmissionResult(null);
-          }}
-        />
+        <main>
+          <SubmissionConfirmation
+            result={submissionResult}
+            candidateName={candidateName}
+            candidateId={candidateId}
+            examTitle={exams[0].title}
+          />
+        </main>
       </div>
     );
   }
 
-  // Render Visual Rules & Guidelines Page
-  if (mode === 'rules' && exams.length > 0) {
-    return (
-      <div className="app-container">
-        <Header platform={platform} appVersion={appVersion} />
-        <ExamRulesPage
-          exam={exams[0]}
-          candidateName={candidateName}
-          candidateId={candidateId}
-          onAcceptRules={handleLaunchAssessment}
-          onBack={() => setMode('onboarding')}
-        />
-      </div>
-    );
-  }
-
-  // Render Candidate Onboarding View
-  if (mode === 'onboarding' && exams.length > 0) {
-    return (
-      <div className="app-container">
-        <Header platform={platform} appVersion={appVersion} />
-        <CandidateOnboarding
-          exam={exams[0]}
-          backendUrl={backendUrl}
-          onProceedToRules={handleProceedToRules}
-          isLoading={isStartingExam}
-        />
-      </div>
-    );
-  }
-
-  // Default: Where U Elevate Assessment Status & Launch Screen
+  // Default: Where U Elevate Pre-Exam Entry Portal
   return (
     <div className="app-container">
       <Header platform={platform} appVersion={appVersion} />
-
       <main>
-        <section className="page-intro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-accent)', letterSpacing: '0.06em' }}>
-                Where U Elevate &bull; Proctoring Suite
-              </span>
-            </div>
-            <h2 className="page-title">Next-Gen Intelligent Assessment Browser</h2>
-            <p className="page-description">
-              Candidate identity verification, mandatory full-screen Kiosk lockdown, hardware anti-overlay protection,
-              MediaPipe deep-learning eye gaze tracking, and explainable integrity telemetry.
-            </p>
-          </div>
-
-          {exams.length > 0 && connectionState === 'connected' && (
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => setMode('onboarding')}
-              style={{ padding: '14px 24px', fontSize: '1rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '10px' }}
-            >
-              <Play size={18} fill="currentColor" />
-              <span>Begin Examination Check-In</span>
-            </button>
-          )}
-        </section>
-
-        {/* Feature Highlights Grid */}
-        <div
-          style={{
-            display: 'grid',
-            gridTemplateColumns: 'repeat(4, 1fr)',
-            gap: '16px',
-            marginBottom: '32px'
-          }}
-        >
-          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
-              <Lock size={18} />
-              <span>Kiosk Lockdown</span>
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-              Mandatory full-screen enforcement. Moving out of the exam or Alt+Tab switching is completely prevented.
-            </p>
-          </div>
-
-          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
-              <Eye size={18} />
-              <span>Eye Gaze Tracking</span>
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-              MediaPipe neural facial keypoints track pupil orientation to verify candidate eyes remain focused on the screen.
-            </p>
-          </div>
-
-          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
-              <Camera size={18} />
-              <span>Multi-Face Detection</span>
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-              Deep BlazeFace detector continuously verifies single-candidate presence and flags secondary individuals.
-            </p>
-          </div>
-
-          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
-              <Sparkles size={18} />
-              <span>Anti-Overlay Guard</span>
-            </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
-              Hardware Content Protection blocks OBS, Discord screen sharing, Game Bar, and third-party overlays.
-            </p>
-          </div>
-        </div>
-
-        <div className="dashboard-grid">
-          <ServiceStatus
-            connectionState={connectionState}
-            health={health}
-            errorDetail={errorDetail}
+        {exams.length > 0 ? (
+          <PreExamPortal
+            exam={exams[0]}
             backendUrl={backendUrl}
-            onRefresh={() => checkConnectivity(backendUrl)}
-            isRefreshing={isRefreshing}
+            candidateName={candidateName}
+            candidateId={candidateId}
+            onUpdateCandidate={(name, id) => {
+              setCandidateName(name);
+              setCandidateId(id);
+            }}
+            screenShareState={screenShareState}
+            screenShareSourceName={screenShareSourceName}
+            screenShareError={screenShareError || screenShareErrorOverride}
+            onStartScreenShare={handleStartScreenShare}
+            onStopScreenShare={() => stopScreenShare('Candidate stopped sharing')}
+            onStartAssessment={handleStartAssessment}
+            isStarting={isStartingExam}
           />
+        ) : (
+          <div style={{ textAlign: 'center', padding: '64px 20px', color: '#64748B', maxWidth: '460px', margin: '0 auto' }}>
+            <div className="spinner" style={{ margin: '0 auto 16px auto' }} />
+            <p style={{ fontWeight: 700, fontSize: '1.125rem', color: '#0F172A', marginBottom: '8px' }}>
+              Connecting to Assessment Service...
+            </p>
+            <p style={{ fontSize: '0.8125rem', color: '#64748B', marginBottom: '16px' }}>
+              Enter the examiner host IP or URL below to connect:
+            </p>
 
-          <SecuritySignals
-            isWindowFocused={isWindowFocused}
-            lastFocusEventTime={lastFocusEventTime}
-            sandboxEnabled={sandboxEnabled}
-          />
-        </div>
+            <div style={{ display: 'flex', gap: '8px', marginBottom: '20px' }}>
+              <input
+                type="text"
+                value={backendUrl}
+                onChange={(e) => setBackendUrl(e.target.value)}
+                placeholder="e.g. http://172.16.176.193:8000"
+                style={{
+                  flex: 1,
+                  padding: '10px 12px',
+                  borderRadius: '8px',
+                  border: '1px solid #CBD5E1',
+                  fontSize: '0.875rem',
+                  fontFamily: 'monospace'
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  localStorage.setItem('sentinel_backend_url', backendUrl);
+                  checkConnectivity(backendUrl);
+                }}
+                className="btn btn-primary"
+                style={{ padding: '10px 16px', fontSize: '0.875rem', fontWeight: 600 }}
+              >
+                Connect
+              </button>
+            </div>
 
-        <ExamOverview
-          exams={exams}
-          isLoading={isRefreshing && exams.length === 0}
-          onRefresh={() => checkConnectivity(backendUrl)}
-        />
+            <div style={{ display: 'flex', justifyContent: 'center', gap: '12px' }}>
+              <button
+                type="button"
+                onClick={() => checkConnectivity(backendUrl)}
+                className="btn btn-secondary"
+                style={{ padding: '8px 18px', fontSize: '0.875rem' }}
+              >
+                Retry
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.sentinelBridge && window.sentinelBridge.closeApp) {
+                    window.sentinelBridge.closeApp();
+                  } else {
+                    window.close();
+                  }
+                }}
+                className="btn btn-secondary"
+                style={{ padding: '8px 18px', fontSize: '0.875rem' }}
+              >
+                Quit Application
+              </button>
+            </div>
+          </div>
+        )}
       </main>
-
       <footer className="app-footer">
-        <div>Where U Elevate &bull; Sentinel Exam Proctoring System</div>
-        <div>Eye Gaze Tracking &bull; Anti-Overlay Content Protection &bull; Kiosk Fullscreen Lock</div>
+        <div>Where U Elevate &bull; Official Candidate Assessment Portal</div>
+        <div>Protected by Hardware Anti-Overlay &bull; Kiosk Full-Screen Lockdown &bull; Real-Time AI Proctoring</div>
       </footer>
     </div>
   );

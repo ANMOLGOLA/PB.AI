@@ -100,6 +100,12 @@ class IntegrityEvent(Base):
     confidence = Column(Float, nullable=False, default=1.0)
     metadata_json = Column(Text, default="{}")
 
+    # Proctor Review Audit Fields
+    review_status = Column(String(30), default="unreviewed", nullable=False)  # "unreviewed", "reviewed", "dismissed", "escalated"
+    review_notes = Column(Text, nullable=True)
+    reviewed_by = Column(String(100), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
+
     session = relationship("ExamSession", back_populates="events")
 
     @property

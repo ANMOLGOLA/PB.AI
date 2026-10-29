@@ -158,6 +158,25 @@ export async function saveAnswer(
 }
 
 /**
+ * Retrieve saved answers for an assessment session (supports interruption recovery).
+ */
+export async function fetchAnswers(
+  baseUrl: string,
+  sessionId: string
+): Promise<Record<string, string>> {
+  try {
+    const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/answers`;
+    const res = await fetch(url, { headers: { Accept: 'application/json' } });
+    if (!res.ok) return {};
+    const data = await res.json();
+    return data.answers || {};
+  } catch (err) {
+    console.warn('Failed to load saved answers:', err);
+    return {};
+  }
+}
+
+/**
  * Log an integrity event (window blur, key blocked, etc.).
  */
 export async function logEvent(
@@ -221,5 +240,48 @@ export async function submitSession(
     headers: { Accept: 'application/json' }
   });
   if (!response.ok) throw new Error(`Exam submission failed: HTTP ${response.status}`);
+  return response.json();
+}
+
+/**
+ * Verify pre-exam readiness conditions (Face ID, screen sharing active).
+ */
+export async function checkSessionReadiness(
+  baseUrl: string,
+  sessionId: string
+): Promise<{
+  session_id: string;
+  screen_sharing_active: boolean;
+  face_enrolled: boolean;
+  is_ready: boolean;
+  candidate_name: string;
+}> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/readiness`;
+  const response = await fetch(url, { headers: { Accept: 'application/json' } });
+  if (!response.ok) throw new Error(`Readiness check failed: HTTP ${response.status}`);
+  return response.json();
+}
+
+/**
+ * Start the assessment officially after mandatory screen sharing is active.
+ */
+export async function startAssessmentSession(
+  baseUrl: string,
+  sessionId: string
+): Promise<{
+  status: string;
+  session_id: string;
+  screen_sharing_active: boolean;
+  message: string;
+}> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/start`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' }
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Start assessment failed: HTTP ${response.status}`);
+  }
   return response.json();
 }

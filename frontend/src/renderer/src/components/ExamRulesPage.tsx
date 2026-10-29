@@ -295,7 +295,7 @@ export const ExamRulesPage: React.FC<ExamRulesPageProps> = ({
               gap: '10px'
             }}
           >
-            <span>{allAgreed ? 'Launch Lockdown & Begin Assessment' : 'Acknowledge All Rules to Proceed'}</span>
+            <span>{allAgreed ? 'Proceed to Screen & Camera Readiness' : 'Acknowledge All Rules to Proceed'}</span>
             <ArrowRight size={18} />
           </button>
         </div>
