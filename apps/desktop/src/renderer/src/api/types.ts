@@ -64,6 +64,8 @@ export interface AnalyzeFrameResult {
   face_id_similarity?: number;
   frame_width?: number;
   frame_height?: number;
+  latency_ms?: number;
+  engine?: string;
 }
 
 export interface PreExamScanResult {

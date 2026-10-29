@@ -10,10 +10,9 @@ import {
   Smartphone,
   Eye,
   RefreshCw,
-  Cpu,
-  Check
+  Cpu
 } from 'lucide-react';
-import { scanPreExamFace, fetchGroqEngineStatus, configureGroqEngine } from '../api/client';
+import { scanPreExamFace, fetchGroqEngineStatus } from '../api/client';
 import { PublicExam, PreExamScanResult } from '../api/types';
 
 interface CandidateOnboardingProps {
@@ -37,38 +36,21 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const [scanResult, setScanResult] = useState<PreExamScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  // AI Vision Engine states
-  const [activeEngine, setActiveEngine] = useState<string>('gemini_vision');
-  const [groqKeyInput, setGroqKeyInput] = useState<string>('');
-  const [groqSavedMessage, setGroqSavedMessage] = useState<string | null>(null);
+  // Real-time proctoring engine states
+  const [activeEngine, setActiveEngine] = useState<string>('local_mediapipe_realtime');
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
 
-  // Fetch AI engine status on mount
+  // Fetch proctoring engine architecture status on mount
   useEffect(() => {
     fetchGroqEngineStatus(backendUrl)
       .then((res) => {
-        setActiveEngine(res.engine);
+        setActiveEngine(res.engine || 'local_mediapipe_realtime');
       })
       .catch(console.warn);
   }, [backendUrl]);
-
-  // Handle saving API Key
-  const handleSaveGroqKey = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!groqKeyInput.trim()) return;
-    try {
-      await configureGroqEngine(backendUrl, groqKeyInput.trim());
-      setActiveEngine('groq_vision');
-      setGroqSavedMessage('AI Vision Key updated & active');
-      setTimeout(() => setGroqSavedMessage(null), 4000);
-      handlePerformScan();
-    } catch {
-      setScanError('Failed to configure API Key');
-    }
-  };
 
   // Initialize camera for self-check & scan
   useEffect(() => {
@@ -172,33 +154,27 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
             </div>
           </div>
 
-          {/* AI Vision Engine Badge */}
+          {/* Architecture Status Badge */}
           <div
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '6px',
-              padding: '6px 12px',
+              padding: '6px 14px',
               borderRadius: '20px',
-              backgroundColor: activeEngine === 'gemini_vision' ? '#ECFDF5' : (activeEngine === 'groq_vision' ? '#EEF2FF' : '#F1F5F9'),
-              border: `1px solid ${activeEngine === 'gemini_vision' ? '#A7F3D0' : (activeEngine === 'groq_vision' ? '#C7D2FE' : '#E2E8F0')}`,
-              color: activeEngine === 'gemini_vision' ? '#059669' : (activeEngine === 'groq_vision' ? '#4F46E5' : '#64748B'),
+              backgroundColor: '#ECFDF5',
+              border: '1px solid #A7F3D0',
+              color: '#059669',
               fontSize: '0.75rem',
               fontWeight: 700
             }}
           >
             <Cpu size={14} />
-            <span>
-              {activeEngine === 'gemini_vision'
-                ? 'Gemini 3.1 Vision AI (Active)'
-                : activeEngine === 'groq_vision'
-                ? 'Groq Vision AI'
-                : 'Local Vision Active'}
-            </span>
+            <span>{activeEngine === 'local_mediapipe_realtime' ? 'MediaPipe BlazeFace (~10ms)' : 'Local Real-Time CV Active'}</span>
           </div>
         </div>
 
-        {/* Optional AI Key Input Form */}
+        {/* Proctoring Architecture & Security Transparency Panel */}
         <div
           style={{
             marginBottom: '20px',
@@ -214,39 +190,13 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
         >
           <div style={{ flex: 1 }}>
             <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155', display: 'block' }}>
-              AI Vision Engine Keys Configured
+              3-Layer Fairness &amp; Proctoring Pipeline Active
             </span>
             <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-              Groq API &amp; Google Gemini Multimodal Vision connected for instant face identification, gaze tracking &amp; phone detection.
+              <strong>Layer A:</strong> On-device MediaPipe CV (~10ms) &bull; <strong>Layer B:</strong> Temporal smoothing (4s threshold against false flickers) &bull; <strong>Layer C:</strong> Secondary forensic review.
             </span>
           </div>
-          <form onSubmit={handleSaveGroqKey} style={{ display: 'flex', gap: '8px' }}>
-            <input
-              type="password"
-              placeholder="Enter Groq Key (gsk_...)"
-              value={groqKeyInput}
-              onChange={(e) => setGroqKeyInput(e.target.value)}
-              style={{
-                padding: '6px 12px',
-                fontSize: '0.8125rem',
-                borderRadius: 'var(--radius-md)',
-                border: '1px solid var(--color-border)',
-                fontFamily: 'inherit',
-                width: '210px'
-              }}
-            />
-            <button type="submit" className="btn btn-secondary" style={{ padding: '6px 12px', fontSize: '0.8125rem' }}>
-              Save Key
-            </button>
-          </form>
         </div>
-
-        {groqSavedMessage && (
-          <div style={{ marginBottom: '14px', color: '#059669', fontSize: '0.8125rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Check size={14} />
-            <span>{groqSavedMessage}</span>
-          </div>
-        )}
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', margin: '20px 0' }}>

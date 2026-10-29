@@ -23,31 +23,38 @@ from app.schemas import (
     EnrollFaceResponse,
     TeacherUnlockRequest,
     TeacherUnlockResponse,
-    SubmitSessionResponse
+    SubmitSessionResponse,
+    IncidentReviewRequest,
+    IncidentReviewResponse
 )
 from app.proctoring import analyze_camera_frame
+from app.vision.temporal_tracker import global_temporal_tracker
+from app.vision.vlm_service import global_vlm_service
 
 router = APIRouter(prefix="/api", tags=["Sessions & Proctoring"])
 
 
 @router.get("/proctor/engine")
 def get_proctor_engine_status():
-    """Check status of Groq and Gemini AI Vision engines."""
-    has_groq = bool(settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "").strip())
-    has_gemini = bool(settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "").strip())
-
-    active_engine = "fallback_local"
-    if has_gemini:
-        active_engine = "gemini_vision"
-    if has_groq:
-        active_engine = "groq_vision"
+    """Check status of Local Computer Vision and Secondary VLM Providers."""
+    vlm_status = global_vlm_service.get_status()
+    has_groq = vlm_status["providers"]["groq_vision"]["configured"]
+    has_gemini = vlm_status["providers"]["gemini_vision"]["configured"]
 
     return {
-        "engine": active_engine,
+        "engine": "local_mediapipe_realtime",
+        "primary_detector": "MediaPipe BlazeFace (Local Real-Time ~10ms)",
+        "temporal_analysis": "Active (Sliding Window & Cooldown Smoothing)",
         "model": settings.GROQ_VISION_MODEL,
         "gemini_model": settings.GEMINI_VISION_MODEL,
         "groq_configured": has_groq,
-        "gemini_configured": has_gemini
+        "gemini_configured": has_gemini,
+        "secondary_vlm_provider": vlm_status["active_secondary_provider"],
+        "pipeline_layers": {
+            "layer_a_local_vision": "MediaPipe BlazeFace (~10ms)",
+            "layer_b_temporal_tracker": "Active (4.0s sustained absence, 2.0s multiple faces)",
+            "layer_c_secondary_vlm": "On-Demand (Gemini 3.1 Flash Lite / Groq)"
+        }
     }
 
 
@@ -336,13 +343,57 @@ def log_integrity_event(
     payload: LogEventRequest,
     db: Session = Depends(get_db)
 ):
-    """Log a security or behavioral integrity telemetry event."""
+    """
+    Log a security or behavioral integrity telemetry event.
+    Provides idempotent deduplication to prevent duplicate logging.
+    """
     exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
     if not exam_session:
         raise HTTPException(status_code=404, detail="Session not found")
 
+    # Idempotent lookup: Check if explicit event_id is supplied
+    explicit_id = payload.metadata.get("event_id") if payload.metadata else None
+    if explicit_id:
+        existing = db.query(IntegrityEvent).filter(IntegrityEvent.id == explicit_id).first()
+        if existing:
+            return EventResponse(
+                id=existing.id,
+                session_id=existing.session_id,
+                event_type=existing.event_type,
+                occurred_at=existing.occurred_at,
+                source=existing.source,
+                severity=existing.severity,
+                confidence=existing.confidence,
+                metadata=existing.metadata_dict
+            )
+
+    # Cooldown deduplication: suppress duplicate events of same type from same source within 2.5s
+    recent_cutoff = datetime.now(timezone.utc).timestamp() - 2.5
+    recent_events = (
+        db.query(IntegrityEvent)
+        .filter(
+            IntegrityEvent.session_id == session_id,
+            IntegrityEvent.event_type == payload.event_type,
+            IntegrityEvent.source == payload.source
+        )
+        .order_by(IntegrityEvent.occurred_at.desc())
+        .first()
+    )
+    if recent_events and recent_events.occurred_at.timestamp() >= recent_cutoff:
+        return EventResponse(
+            id=recent_events.id,
+            session_id=recent_events.session_id,
+            event_type=recent_events.event_type,
+            occurred_at=recent_events.occurred_at,
+            source=recent_events.source,
+            severity=recent_events.severity,
+            confidence=recent_events.confidence,
+            metadata=recent_events.metadata_dict
+        )
+
+    event_id = explicit_id or str(uuid.uuid4())
     event = IntegrityEvent(
-        id=str(uuid.uuid4()),
+        id=event_id,
         session_id=session_id,
         event_type=payload.event_type,
         occurred_at=datetime.now(timezone.utc),
@@ -432,82 +483,28 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
             db.add(enroll_event)
             db.commit()
 
-    # Auto-log anomalous signals if linked to active session
+    # Layer B: Temporal smoothing and sustained event evaluation
     if exam_session and exam_session.status == "active":
-        if analysis["status"] == "no_face":
-            event = IntegrityEvent(
-                id=str(uuid.uuid4()),
-                session_id=payload.session_id,
-                event_type="NO_FACE_DETECTED",
+        sustained_events = global_temporal_tracker.evaluate_frame(exam_session.id, analysis)
+        for ev in sustained_events:
+            event_type = ev["event_type"]
+            db_event = IntegrityEvent(
+                id=ev["event_id"],
+                session_id=exam_session.id,
+                event_type="NO_FACE_DETECTED" if event_type == "FACE_ABSENT_SUSTAINED" else event_type,
                 occurred_at=datetime.now(timezone.utc),
-                source="opencv_cv_engine",
-                severity="high",
-                confidence=analysis["confidence"],
-                metadata_json=json.dumps({"reason": "Candidate not visible in webcam frame"})
-            )
-            db.add(event)
-            db.commit()
-        elif analysis["status"] == "multiple_faces":
-            event = IntegrityEvent(
-                id=str(uuid.uuid4()),
-                session_id=payload.session_id,
-                event_type="MULTIPLE_FACES_DETECTED",
-                occurred_at=datetime.now(timezone.utc),
-                source="opencv_cv_engine",
-                severity="critical",
-                confidence=analysis["confidence"],
+                source=ev["source"],
+                severity=ev["severity"],
+                confidence=ev["confidence"],
                 metadata_json=json.dumps({
-                    "face_count": analysis["face_count"],
-                    "reason": "Multiple individuals detected in proctoring feed"
+                    **ev.get("metadata", {}),
+                    "original_temporal_type": event_type,
+                    "duration_ms": ev.get("duration_ms"),
+                    "temporal_smoothed": True
                 })
             )
-            db.add(event)
-            db.commit()
-        elif analysis["status"] == "face_mismatch" or not analysis.get("face_id_match", True):
-            event = IntegrityEvent(
-                id=str(uuid.uuid4()),
-                session_id=payload.session_id,
-                event_type="FACE_MISMATCH_IMPERSONATION",
-                occurred_at=datetime.now(timezone.utc),
-                source="mediapipe_biometrics",
-                severity="critical",
-                confidence=0.94,
-                metadata_json=json.dumps({
-                    "reason": "Active candidate face does not match enrolled Face ID",
-                    "similarity": analysis.get("face_id_similarity", 0.0)
-                })
-            )
-            db.add(event)
-            db.commit()
-        elif analysis.get("phone_detected", False):
-            event = IntegrityEvent(
-                id=str(uuid.uuid4()),
-                session_id=payload.session_id,
-                event_type="PHONE_OR_DEVICE_DETECTED",
-                occurred_at=datetime.now(timezone.utc),
-                source="device_vision_scanner",
-                severity="critical",
-                confidence=0.90,
-                metadata_json=json.dumps({
-                    "reason": "Unauthorized mobile phone or foreign object detected in camera view"
-                })
-            )
-            db.add(event)
-            db.commit()
-        elif analysis.get("eyewear_detected", False):
-            event = IntegrityEvent(
-                id=str(uuid.uuid4()),
-                session_id=payload.session_id,
-                event_type="RESTRICTED_EYEWEAR_DETECTED",
-                occurred_at=datetime.now(timezone.utc),
-                source="opencv_vision_analyzer",
-                severity="high",
-                confidence=0.90,
-                metadata_json=json.dumps({
-                    "reason": "Tinted or dark eyewear detected obscuring candidate eye gaze"
-                })
-            )
-            db.add(event)
+            db.add(db_event)
+        if sustained_events:
             db.commit()
 
     return AnalyzeFrameResponse(
@@ -525,8 +522,54 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
         face_id_match=analysis.get("face_id_match", True),
         face_id_similarity=analysis.get("face_id_similarity", 1.0),
         frame_width=analysis.get("frame_width", 640),
-        frame_height=analysis.get("frame_height", 480)
+        frame_height=analysis.get("frame_height", 480),
+        latency_ms=analysis.get("latency_ms", 10.0),
+        engine="local_mediapipe_realtime"
     )
+
+
+@router.post("/sessions/{session_id}/incident-review", response_model=IncidentReviewResponse)
+def review_incident_snapshot(
+    session_id: str,
+    payload: IncidentReviewRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Layer C: On-demand forensic review of a flagged incident snapshot using optional VLM.
+    Strictly isolated from real-time webcam frame loop.
+    Observations are explicitly marked as model_suggestion and unverified_by_examiner.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    result = global_vlm_service.review_incident(
+        image_base64=payload.image_base64,
+        incident_context=payload.incident_context or f"Forensic review for session {session_id}",
+        preferred_provider=payload.preferred_provider
+    )
+
+    if result.get("status") == "success":
+        review_event = IntegrityEvent(
+            id=str(uuid.uuid4()),
+            session_id=session_id,
+            event_type="VLM_INCIDENT_REVIEW",
+            occurred_at=datetime.now(timezone.utc),
+            source=f"vlm_{result['provider_name']}",
+            severity="info",
+            confidence=0.85,
+            metadata_json=json.dumps({
+                "provider": result["provider_name"],
+                "model": result["model_name"],
+                "summary": result["semantic_summary"],
+                "observations": result["observations"],
+                "unverified_by_examiner": True
+            })
+        )
+        db.add(review_event)
+        db.commit()
+
+    return IncidentReviewResponse(**result)
 
 
 @router.post("/sessions/{session_id}/submit", response_model=SubmitSessionResponse)

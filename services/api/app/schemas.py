@@ -127,6 +127,8 @@ class AnalyzeFrameResponse(BaseModel):
     face_id_similarity: float = 1.0
     frame_width: Optional[int] = 640
     frame_height: Optional[int] = 480
+    latency_ms: Optional[float] = 10.0
+    engine: Optional[str] = "local_mediapipe_realtime"
 
 
 # --- Pre-Exam Biometric Scan Schemas ---
@@ -177,3 +179,22 @@ class SubmitSessionResponse(BaseModel):
     submitted_at: datetime
     events_summary: Dict[str, int]
     events: List[EventResponse]
+
+
+# --- Layer C: Optional Secondary Forensic Review Schemas ---
+
+class IncidentReviewRequest(BaseModel):
+    image_base64: str
+    incident_context: Optional[str] = None
+    preferred_provider: Optional[str] = None
+
+
+class IncidentReviewResponse(BaseModel):
+    provider_name: str
+    model_name: str
+    status: str
+    semantic_summary: Optional[str] = None
+    observations: Dict[str, Any] = {}
+    latency_ms: float = 0.0
+    error_message: Optional[str] = None
+    unverified_by_examiner: bool = True

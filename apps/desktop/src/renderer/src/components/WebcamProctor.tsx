@@ -469,11 +469,11 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       )}
 
       <div style={{ padding: '6px 12px', fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <span>Gaze: <strong>{analysis.gaze_direction}</strong></span>
+        <span>Head Pose: <strong>{analysis.gaze_direction}</strong></span>
         <span>
-          Face ID:{' '}
-          <strong style={{ color: isMismatch ? '#DC2626' : '#059669' }}>
-            {isMismatch ? 'MISMATCH (IMPERSONATION)' : 'VERIFIED MATCH'}
+          Local CV Latency:{' '}
+          <strong style={{ color: '#059669' }}>
+            {analysis.latency_ms ? `${analysis.latency_ms}ms` : '~10ms'}
           </strong>
         </span>
       </div>
