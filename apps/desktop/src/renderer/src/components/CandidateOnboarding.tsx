@@ -37,8 +37,8 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const [scanResult, setScanResult] = useState<PreExamScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
 
-  // Groq Vision Engine states
-  const [groqConfigured, setGroqConfigured] = useState<boolean>(false);
+  // AI Vision Engine states
+  const [activeEngine, setActiveEngine] = useState<string>('gemini_vision');
   const [groqKeyInput, setGroqKeyInput] = useState<string>('');
   const [groqSavedMessage, setGroqSavedMessage] = useState<string | null>(null);
 
@@ -46,28 +46,27 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
 
-  // Fetch Groq engine status on mount
+  // Fetch AI engine status on mount
   useEffect(() => {
     fetchGroqEngineStatus(backendUrl)
       .then((res) => {
-        setGroqConfigured(res.groq_configured);
+        setActiveEngine(res.engine);
       })
       .catch(console.warn);
   }, [backendUrl]);
 
-  // Handle saving Groq API Key
+  // Handle saving API Key
   const handleSaveGroqKey = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!groqKeyInput.trim()) return;
     try {
       await configureGroqEngine(backendUrl, groqKeyInput.trim());
-      setGroqConfigured(true);
-      setGroqSavedMessage('Groq Vision AI active (LLaMA 3.2 Vision)');
+      setActiveEngine('groq_vision');
+      setGroqSavedMessage('AI Vision Key updated & active');
       setTimeout(() => setGroqSavedMessage(null), 4000);
-      // Trigger fresh scan with Groq
       handlePerformScan();
     } catch {
-      setScanError('Failed to configure Groq API Key');
+      setScanError('Failed to configure API Key');
     }
   };
 
@@ -173,7 +172,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
             </div>
           </div>
 
-          {/* Groq Engine Badge */}
+          {/* AI Vision Engine Badge */}
           <div
             style={{
               display: 'inline-flex',
@@ -181,19 +180,25 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
               gap: '6px',
               padding: '6px 12px',
               borderRadius: '20px',
-              backgroundColor: groqConfigured ? '#EEF2FF' : '#F1F5F9',
-              border: `1px solid ${groqConfigured ? '#C7D2FE' : '#E2E8F0'}`,
-              color: groqConfigured ? '#4F46E5' : '#64748B',
+              backgroundColor: activeEngine === 'gemini_vision' ? '#ECFDF5' : (activeEngine === 'groq_vision' ? '#EEF2FF' : '#F1F5F9'),
+              border: `1px solid ${activeEngine === 'gemini_vision' ? '#A7F3D0' : (activeEngine === 'groq_vision' ? '#C7D2FE' : '#E2E8F0')}`,
+              color: activeEngine === 'gemini_vision' ? '#059669' : (activeEngine === 'groq_vision' ? '#4F46E5' : '#64748B'),
               fontSize: '0.75rem',
               fontWeight: 700
             }}
           >
             <Cpu size={14} />
-            <span>{groqConfigured ? 'Groq LLaMA 3.2 Vision' : 'AI Vision Engine Active'}</span>
+            <span>
+              {activeEngine === 'gemini_vision'
+                ? 'Gemini 3.1 Vision AI (Active)'
+                : activeEngine === 'groq_vision'
+                ? 'Groq Vision AI'
+                : 'Local Vision Active'}
+            </span>
           </div>
         </div>
 
-        {/* Optional Groq API Key Input Form */}
+        {/* Optional AI Key Input Form */}
         <div
           style={{
             marginBottom: '20px',
@@ -209,10 +214,10 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
         >
           <div style={{ flex: 1 }}>
             <span style={{ fontSize: '0.8125rem', fontWeight: 600, color: '#334155', display: 'block' }}>
-              Groq Vision API Key (Optional Override)
+              AI Vision Engine Keys Configured
             </span>
             <span style={{ fontSize: '0.75rem', color: '#64748B' }}>
-              Powered by Groq LLaMA 3.2 Vision for rapid face identification &amp; phone detection.
+              Groq API &amp; Google Gemini Multimodal Vision connected for instant face identification, gaze tracking &amp; phone detection.
             </span>
           </div>
           <form onSubmit={handleSaveGroqKey} style={{ display: 'flex', gap: '8px' }}>

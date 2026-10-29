@@ -32,30 +32,53 @@ router = APIRouter(prefix="/api", tags=["Sessions & Proctoring"])
 
 @router.get("/proctor/engine")
 def get_proctor_engine_status():
-    """Check whether Groq AI Vision engine or local fallback is active."""
-    has_key = bool(settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "").strip())
+    """Check status of Groq and Gemini AI Vision engines."""
+    has_groq = bool(settings.GROQ_API_KEY or os.environ.get("GROQ_API_KEY", "").strip())
+    has_gemini = bool(settings.GEMINI_API_KEY or os.environ.get("GEMINI_API_KEY", "").strip())
+
+    active_engine = "fallback_local"
+    if has_gemini:
+        active_engine = "gemini_vision"
+    if has_groq:
+        active_engine = "groq_vision"
+
     return {
-        "engine": "groq_vision" if has_key else "fallback_local",
+        "engine": active_engine,
         "model": settings.GROQ_VISION_MODEL,
-        "groq_configured": has_key
+        "gemini_model": settings.GEMINI_VISION_MODEL,
+        "groq_configured": has_groq,
+        "gemini_configured": has_gemini
     }
 
 
 @router.post("/proctor/engine/configure")
 def configure_groq_engine(payload: dict):
-    """Dynamically set or update the Groq API key for AI vision proctoring."""
-    key = payload.get("api_key", "").strip()
+    """Dynamically set or update Groq and Gemini API keys for AI vision proctoring."""
+    key = payload.get("api_key", "").strip() or payload.get("groq_api_key", "").strip()
     if key:
         settings.GROQ_API_KEY = key
         os.environ["GROQ_API_KEY"] = key
+
+    gemini_key = payload.get("gemini_api_key", "").strip()
+    if gemini_key:
+        settings.GEMINI_API_KEY = gemini_key
+        os.environ["GEMINI_API_KEY"] = gemini_key
+
     model = payload.get("model", "").strip()
     if model:
         settings.GROQ_VISION_MODEL = model
+
+    has_groq = bool(settings.GROQ_API_KEY)
+    has_gemini = bool(settings.GEMINI_API_KEY)
+
     return {
-        "configured": bool(settings.GROQ_API_KEY),
-        "engine": "groq_vision" if bool(settings.GROQ_API_KEY) else "fallback_local",
+        "configured": has_groq or has_gemini,
+        "engine": "groq_vision" if has_groq else ("gemini_vision" if has_gemini else "fallback_local"),
         "model": settings.GROQ_VISION_MODEL,
-        "message": "Groq AI Vision configuration updated."
+        "gemini_model": settings.GEMINI_VISION_MODEL,
+        "groq_configured": has_groq,
+        "gemini_configured": has_gemini,
+        "message": "AI Vision configuration updated."
     }
 
 

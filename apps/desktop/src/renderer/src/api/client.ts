@@ -85,12 +85,14 @@ export async function scanPreExamFace(
 export const scanPreExamFaceAndEar = scanPreExamFace;
 
 /**
- * Check whether Groq Vision engine is configured on backend.
+ * Check whether Groq or Gemini Vision engine is configured on backend.
  */
 export async function fetchGroqEngineStatus(baseUrl: string): Promise<{
   engine: string;
   model: string;
+  gemini_model?: string;
   groq_configured: boolean;
+  gemini_configured?: boolean;
 }> {
   const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/engine`;
   const response = await fetch(url, { headers: { Accept: 'application/json' } });
@@ -99,20 +101,21 @@ export async function fetchGroqEngineStatus(baseUrl: string): Promise<{
 }
 
 /**
- * Configure Groq API Key on backend.
+ * Configure Groq and/or Gemini API Keys on backend.
  */
 export async function configureGroqEngine(
   baseUrl: string,
   apiKey: string,
+  geminiApiKey?: string,
   model = 'llama-3.2-11b-vision-preview'
 ): Promise<{ configured: boolean; engine: string; message: string }> {
   const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/engine/configure`;
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ api_key: apiKey, model })
+    body: JSON.stringify({ api_key: apiKey, gemini_api_key: geminiApiKey, model })
   });
-  if (!response.ok) throw new Error('Failed to configure Groq engine');
+  if (!response.ok) throw new Error('Failed to configure vision engine');
   return response.json();
 }
 
