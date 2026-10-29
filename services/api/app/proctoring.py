@@ -79,74 +79,83 @@ def check_dark_eyewear(frame: np.ndarray, eye_coords: List[Dict[str, int]]) -> b
         return False
 
 
-def scan_earpiece_and_audio_devices(
+def detect_phone_and_foreign_objects(
     frame: np.ndarray,
-    ear_points: List[Dict[str, int]],
-    face_box: Dict[str, int]
+    face_boxes: List[Dict[str, int]]
 ) -> Dict[str, Any]:
     """
-    Scans the candidate's auricular/ear regions for concealed earpieces,
-    Bluetooth earbuds (AirPods/black buds), or over-ear headset hardware.
+    Scans the camera frame outside the candidate's face region for unauthorized
+    mobile phones, tablets, second screens, or foreign electronic objects.
     """
-    h, w, _ = frame.shape
-    earpiece_found = False
-    detected_side = None
-    ear_boxes: List[Dict[str, int]] = []
-
     try:
+        h, w, _ = frame.shape
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        hsv = cv2.cvtColor(frame, cv2.COLOR_BGR2HSV)
 
-        bw = max(15, int(face_box.get("width", 100) * 0.16))
-        bh = max(18, int(face_box.get("height", 120) * 0.20))
+        # Create mask excluding the candidate's face area
+        mask = np.ones((h, w), dtype=np.uint8) * 255
+        for fb in face_boxes:
+            # Expand face box slightly
+            fx1 = max(0, fb["x"] - 20)
+            fy1 = max(0, fb["y"] - 20)
+            fx2 = min(w, fb["x"] + fb["width"] + 20)
+            fy2 = min(h, fb["y"] + fb["height"] + 40)
+            mask[fy1:fy2, fx1:fx2] = 0
 
-        for ear in ear_points:
-            ex, ey = ear["x"], ear["y"]
-            x1 = max(0, ex - bw)
-            x2 = min(w, ex + bw)
-            y1 = max(0, ey - bh)
-            y2 = min(h, ey + bh)
+        masked_gray = cv2.bitwise_and(gray, gray, mask=mask)
 
-            if x2 > x1 and y2 > y1:
-                ear_boxes.append({"x": x1, "y": y1, "width": x2 - x1, "height": y2 - y1, "name": ear.get("name", "ear")})
-                ear_crop_gray = gray[y1:y2, x1:x2]
-                ear_crop_hsv = hsv[y1:y2, x1:x2]
+        # Edge detection for rigid rectangular handheld devices
+        blurred = cv2.GaussianBlur(masked_gray, (5, 5), 0)
+        edges = cv2.Canny(blurred, 35, 120)
+        kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
+        dilated = cv2.dilate(edges, kernel, iterations=1)
 
-                # Check 1: Stark white plastic device (e.g. White AirPods)
-                # Low saturation (<25) + High brightness (>225)
-                white_plastic = cv2.inRange(ear_crop_hsv, np.array([0, 0, 220]), np.array([180, 30, 255]))
-                white_ratio = np.sum(white_plastic > 0) / float(white_plastic.size)
+        contours, _ = cv2.findContours(dilated, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
 
-                # Check 2: Dark in-ear plastic / rubber bud
-                # Very low brightness (<25) with high contrast against ear cavity
-                dark_device = cv2.inRange(ear_crop_gray, 0, 28)
-                dark_ratio = np.sum(dark_device > 0) / float(dark_device.size)
+        detected_devices: List[Dict[str, int]] = []
+        is_device_detected = False
 
-                # Check 3: High-contrast circular or oval shape (earbud form-factor)
-                edges = cv2.Canny(ear_crop_gray, 50, 150)
-                edge_density = np.sum(edges > 0) / float(edges.size)
+        for cnt in contours:
+            area = cv2.contourArea(cnt)
+            # Typical phone area in 640x480 webcam frame: 1,500 to 50,000 pixels
+            if 1500 <= area <= 55000:
+                bx, by, bw, bh = cv2.boundingRect(cnt)
+                aspect_ratio = max(bw, bh) / max(1.0, float(min(bw, bh)))
 
-                if (white_ratio > 0.14 or dark_ratio > 0.20) and edge_density > 0.08:
-                    earpiece_found = True
-                    detected_side = ear.get("name", "ear")
-                    break
+                # Smartphone standard aspect ratios range between 1.45 and 2.7
+                if 1.40 <= aspect_ratio <= 2.75:
+                    # Verify rectangularity (extent)
+                    extent = area / float(bw * bh)
+                    if extent >= 0.55:
+                        # Inspect interior texture: phone screens have low internal variance or distinct glowing display
+                        roi = masked_gray[by:by+bh, bx:bx+bw]
+                        if roi.size > 0:
+                            std_dev = np.std(roi)
+                            mean_val = np.mean(roi)
+                            # Phone screen characteristics (either dark glass surface std_dev < 38 or illuminated screen)
+                            if std_dev < 40 or mean_val > 180:
+                                detected_devices.append({
+                                    "x": int(bx),
+                                    "y": int(by),
+                                    "width": int(bw),
+                                    "height": int(bh)
+                                })
+                                is_device_detected = True
+                                break
 
         return {
-            "scanned": len(ear_points) > 0,
-            "earpiece_detected": earpiece_found,
-            "side": detected_side,
-            "ear_boxes": ear_boxes,
-            "confidence": 0.94 if earpiece_found else 0.98,
-            "details": "Concealed audio earpiece detected in ear canal region" if earpiece_found else "No audio devices or earpieces detected"
+            "detected": is_device_detected,
+            "count": len(detected_devices),
+            "boxes": detected_devices,
+            "confidence": 0.88 if is_device_detected else 0.98,
+            "label": "PHONE_OR_DEVICE" if is_device_detected else "NONE"
         }
     except Exception:
         return {
-            "scanned": False,
-            "earpiece_detected": False,
-            "side": None,
-            "ear_boxes": [],
+            "detected": False,
+            "count": 0,
+            "boxes": [],
             "confidence": 0.50,
-            "details": "Ear scan could not be completed"
+            "label": "NONE"
         }
 
 
@@ -156,12 +165,12 @@ def compute_biometric_face_signature(
     bbox: Dict[str, int]
 ) -> Dict[str, Any]:
     """
-    Computes a normalized geometric and texture biometric face signature
-    from MediaPipe landmark keypoints to enforce candidate identity verification.
+    Computes a robust biometric face signature combining invariant geometric landmark
+    ratios and an aligned grayscale template for candidate identity verification.
     """
     try:
         h, w, _ = frame.shape
-        # Keypoints: [0: r_eye, 1: l_eye, 2: nose, 3: mouth, 4: r_ear, 5: l_ear]
+        # Keypoints: [0: r_eye, 1: l_eye, 2: nose, 3: mouth]
         pts = [(kp.x, kp.y) for kp in keypoints]
         r_eye = pts[0]
         l_eye = pts[1]
@@ -173,55 +182,55 @@ def compute_biometric_face_signature(
         if iod < 1e-4:
             iod = 1e-4
 
-        # Invariant geometric proportions
+        # Invariant geometric proportions normalized by inter-ocular distance
         r_eye_nose = np.hypot(nose[0] - r_eye[0], nose[1] - r_eye[1]) / iod
         l_eye_nose = np.hypot(nose[0] - l_eye[0], nose[1] - l_eye[1]) / iod
         nose_mouth = np.hypot(mouth[0] - nose[0], mouth[1] - nose[1]) / iod
+        eye_mouth = np.hypot(mouth[0] - (r_eye[0] + l_eye[0]) / 2, mouth[1] - (r_eye[1] + l_eye[1]) / 2) / iod
         face_ratio = float(bbox["height"]) / max(1.0, float(bbox["width"]))
-
-        ear_r_dist = 0.0
-        ear_l_dist = 0.0
-        if len(pts) >= 6:
-            ear_r_dist = np.hypot(pts[4][0] - r_eye[0], pts[4][1] - r_eye[1]) / iod
-            ear_l_dist = np.hypot(pts[5][0] - l_eye[0], pts[5][1] - l_eye[1]) / iod
 
         geom_vector = [
             round(float(r_eye_nose), 4),
             round(float(l_eye_nose), 4),
             round(float(nose_mouth), 4),
-            round(float(face_ratio), 4),
-            round(float(ear_r_dist), 4),
-            round(float(ear_l_dist), 4),
+            round(float(eye_mouth), 4),
+            round(float(face_ratio), 4)
         ]
 
-        # Normalized face crop grayscale intensity histogram (16 bins)
+        # Aligned 24x24 face crop appearance template
         bx = max(0, bbox["x"])
         by = max(0, bbox["y"])
         bw = min(w - bx, bbox["width"])
         bh = min(h - by, bbox["height"])
-        hist_vector = []
-        if bw > 10 and bh > 10:
+        template_vector = []
+
+        if bw > 15 and bh > 15:
             face_crop = frame[by:by+bh, bx:bx+bw]
             gray_crop = cv2.cvtColor(face_crop, cv2.COLOR_BGR2GRAY)
-            norm_crop = cv2.resize(gray_crop, (32, 32))
-            hist = cv2.calcHist([norm_crop], [0], None, [16], [0, 256])
-            hist = cv2.normalize(hist, hist).flatten()
-            hist_vector = [round(float(v), 4) for v in hist]
+            # Normalize illumination
+            eq_crop = cv2.equalizeHist(gray_crop)
+            resized = cv2.resize(eq_crop, (24, 24)).astype(np.float32)
+            # Zero-mean unit variance normalization
+            std_val = float(np.std(resized))
+            if std_val > 1e-4:
+                norm_template = (resized - float(np.mean(resized))) / std_val
+            else:
+                norm_template = resized - float(np.mean(resized))
+            template_vector = [round(float(v), 3) for v in norm_template.flatten()]
 
-        # Generate a unique candidate Face ID token
         unique_token = f"FID-{uuid.uuid4().hex[:8].upper()}"
 
         return {
             "face_id": unique_token,
             "geom": geom_vector,
-            "hist": hist_vector,
+            "template": template_vector,
             "status": "valid"
         }
     except Exception as exc:
         return {
             "face_id": f"FID-{uuid.uuid4().hex[:8].upper()}",
             "geom": [],
-            "hist": [],
+            "template": [],
             "status": f"error: {str(exc)}"
         }
 
@@ -231,8 +240,9 @@ def verify_face_signature(
     enrolled_sig_raw: str
 ) -> Tuple[bool, float]:
     """
-    Compares the current face biometric signature against the enrolled Face ID.
+    Compares the active face biometric signature against the candidate's enrolled Face ID.
     Returns: (is_match: bool, similarity: float)
+    Strict threshold (< 0.65) flags unauthorized substitute candidates / friends.
     """
     try:
         if not enrolled_sig_raw:
@@ -248,24 +258,29 @@ def verify_face_signature(
         if len(curr_geom) < 4 or len(enr_geom) < 4:
             return True, 1.0
 
-        # Geometric similarity (Manhattan distance on normalized proportions)
+        # Geometric similarity (Euclidean distance on normalized facial landmark proportions)
         min_len = min(len(curr_geom), len(enr_geom))
-        geom_dist = np.mean(np.abs(curr_geom[:min_len] - enr_geom[:min_len]))
-        geom_sim = max(0.0, 1.0 - (geom_dist / 0.55))
+        geom_dist = np.linalg.norm(curr_geom[:min_len] - enr_geom[:min_len])
+        geom_sim = max(0.0, 1.0 - (geom_dist / 0.35))
 
-        # Histogram texture similarity (cosine similarity)
-        curr_hist = np.array(current_sig.get("hist", []), dtype=float)
-        enr_hist = np.array(enrolled.get("hist", []), dtype=float)
-        hist_sim = 1.0
-        if len(curr_hist) == len(enr_hist) and len(curr_hist) > 0:
-            norm_c = np.linalg.norm(curr_hist)
-            norm_e = np.linalg.norm(enr_hist)
+        # Template correlation similarity
+        curr_tmpl = np.array(current_sig.get("template", []), dtype=float)
+        enr_tmpl = np.array(enrolled.get("template", []), dtype=float)
+        tmpl_sim = 0.0
+
+        if len(curr_tmpl) == len(enr_tmpl) and len(curr_tmpl) > 0:
+            norm_c = np.linalg.norm(curr_tmpl)
+            norm_e = np.linalg.norm(enr_tmpl)
             if norm_c > 1e-4 and norm_e > 1e-4:
-                hist_sim = max(0.0, float(np.dot(curr_hist, enr_hist) / (norm_c * norm_e)))
+                # Pearson correlation coefficient between face appearance templates
+                dot_prod = float(np.dot(curr_tmpl, enr_tmpl) / (norm_c * norm_e))
+                tmpl_sim = max(0.0, dot_prod)
 
-        combined_similarity = round(float(0.65 * geom_sim + 0.35 * hist_sim), 3)
-        # Threshold: > 0.62 is verified same person
-        is_match = combined_similarity >= 0.62
+        # Combined biometric score: 45% landmark geometry + 55% template appearance correlation
+        combined_similarity = round(float(0.45 * geom_sim + 0.55 * tmpl_sim), 3)
+
+        # Strict Threshold: score >= 0.65 is the same candidate. Lower is an unauthorized substitute person
+        is_match = combined_similarity >= 0.65
         return is_match, combined_similarity
     except Exception:
         return True, 1.0
@@ -277,8 +292,12 @@ def analyze_camera_frame(
 ) -> Dict[str, Any]:
     """
     Decodes a base64 camera frame and performs deep-learning computer vision face analysis.
-    Extracts face count, bounding boxes, eye keypoints, ear keypoints, gaze orientation,
-    eyewear checks, earpiece detection, and biometric Face ID anti-impersonation verification.
+    Extracts:
+      - Face count & bounding boxes (BlazeFace + Profile cascade)
+      - Eye keypoints & calibrated eye gaze direction
+      - Prohibited dark sunglasses check
+      - Phone & unidentified foreign device detection
+      - Candidate Face ID biometric verification against enrolled signature
     """
     try:
         if "," in image_base64:
@@ -298,10 +317,9 @@ def analyze_camera_frame(
                 "gaze_direction": "UNKNOWN",
                 "looking_at_screen": False,
                 "eyes": [],
-                "ears": [],
                 "eyewear_detected": False,
-                "earpiece_detected": False,
-                "ear_scan": {"scanned": False, "earpiece_detected": False},
+                "phone_detected": False,
+                "phone_boxes": [],
                 "face_id_match": True,
                 "face_id_similarity": 1.0,
                 "face_signature": None
@@ -317,7 +335,6 @@ def analyze_camera_frame(
         gaze_direction = "CENTER"
         looking_at_screen = True
         eye_points: List[Dict[str, int]] = []
-        ear_points: List[Dict[str, int]] = []
         computed_sig: Optional[Dict[str, Any]] = None
 
         if results.detections:
@@ -350,13 +367,6 @@ def analyze_camera_frame(
                         {"x": int(l_eye[0] * w), "y": int(l_eye[1] * h), "name": "left_eye"}
                     ]
 
-                    # Extract ear keypoints if available (MediaPipe BlazeFace kps 4 & 5)
-                    if len(kps) >= 6:
-                        ear_points = [
-                            {"x": int(kps[4].x * w), "y": int(kps[4].y * h), "name": "right_ear"},
-                            {"x": int(kps[5].x * w), "y": int(kps[5].y * h), "name": "left_ear"}
-                        ]
-
                     computed_sig = compute_biometric_face_signature(frame, kps, curr_box)
 
         face_count = len(bounding_boxes)
@@ -388,12 +398,12 @@ def analyze_camera_frame(
         # 3. Check for dark/tinted eyewear on candidate
         eyewear_detected = check_dark_eyewear(frame, eye_points) if eye_points else False
 
-        # 4. Scan ear regions for earpiece / audio hardware
-        ear_scan_result = {"scanned": False, "earpiece_detected": False}
-        if bounding_boxes and ear_points:
-            ear_scan_result = scan_earpiece_and_audio_devices(frame, ear_points, bounding_boxes[0])
+        # 4. Check for mobile phones or unidentified foreign devices in frame
+        phone_scan = detect_phone_and_foreign_objects(frame, bounding_boxes)
+        phone_detected = phone_scan["detected"]
+        phone_boxes = phone_scan["boxes"]
 
-        # 5. Biometric Face ID verification (Anti-impersonation)
+        # 5. Biometric Face ID Anti-Impersonation Check
         face_id_match = True
         face_id_similarity = 1.0
         if enrolled_signature and computed_sig:
@@ -402,7 +412,7 @@ def analyze_camera_frame(
         if face_count == 1:
             if not face_id_match:
                 status = "face_mismatch"
-                confidence = 0.92
+                confidence = 0.94
             else:
                 status = "verified"
                 confidence = 0.98
@@ -424,10 +434,9 @@ def analyze_camera_frame(
             "gaze_direction": gaze_direction,
             "looking_at_screen": looking_at_screen,
             "eyes": eye_points,
-            "ears": ear_points,
             "eyewear_detected": eyewear_detected,
-            "earpiece_detected": ear_scan_result.get("earpiece_detected", False),
-            "ear_scan": ear_scan_result,
+            "phone_detected": phone_detected,
+            "phone_boxes": phone_boxes,
             "face_id_match": face_id_match,
             "face_id_similarity": face_id_similarity,
             "face_signature": computed_sig,
@@ -444,10 +453,9 @@ def analyze_camera_frame(
             "gaze_direction": "ERROR",
             "looking_at_screen": False,
             "eyes": [],
-            "ears": [],
             "eyewear_detected": False,
-            "earpiece_detected": False,
-            "ear_scan": {"scanned": False, "earpiece_detected": False},
+            "phone_detected": False,
+            "phone_boxes": [],
             "face_id_match": True,
             "face_id_similarity": 1.0,
             "face_signature": None

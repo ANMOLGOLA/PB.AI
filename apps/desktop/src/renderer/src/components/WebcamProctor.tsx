@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, AlertTriangle, Users, Eye, EyeOff, UserX } from 'lucide-react';
+import { Camera, AlertTriangle, Users, Eye, EyeOff, UserX, Smartphone } from 'lucide-react';
 import { analyzeFrame } from '../api/client';
 import { AnalyzeFrameResult } from '../api/types';
 
@@ -26,7 +26,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   const gazeAwayCountRef = useRef<number>(0);
   const noFaceCountRef = useRef<number>(0);
   const mismatchCountRef = useRef<number>(0);
-  const earpieceCountRef = useRef<number>(0);
+  const phoneCountRef = useRef<number>(0);
 
   const [analysis, setAnalysis] = useState<AnalyzeFrameResult>({
     face_detected: true,
@@ -37,9 +37,9 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     gaze_direction: 'CENTER',
     looking_at_screen: true,
     eyes: [],
-    ears: [],
     eyewear_detected: false,
-    earpiece_detected: false,
+    phone_detected: false,
+    phone_boxes: [],
     face_id_match: true,
     face_id_similarity: 1.0,
     frame_width: 640,
@@ -124,13 +124,13 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         gazeAwayCountRef.current += 1;
         if (gazeAwayCountRef.current >= 4) {
           onViolation?.('GAZE_AWAY_FROM_SCREEN', `Candidate looking away from screen (${result.gaze_direction}).`);
-          gazeAwayCountRef.current = 0; // Reset after alert
+          gazeAwayCountRef.current = 0;
         }
       } else if (result.looking_at_screen) {
         gazeAwayCountRef.current = 0;
       }
 
-      // 4. Face ID Biometric Anti-Impersonation Check (Requires 2 consecutive frames ~1.6s)
+      // 4. Biometric Face ID Anti-Impersonation Check
       if (result.status === 'face_mismatch' || result.face_id_match === false) {
         mismatchCountRef.current += 1;
         if (mismatchCountRef.current >= 2) {
@@ -141,15 +141,15 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         mismatchCountRef.current = 0;
       }
 
-      // 5. Earpiece / Audio Device Check (Requires 2 consecutive frames ~1.6s)
-      if (result.earpiece_detected) {
-        earpieceCountRef.current += 1;
-        if (earpieceCountRef.current >= 2) {
-          onViolation?.('EARPIECE_DETECTED', 'Concealed audio earpiece or Bluetooth earbud detected in ear region.');
-          earpieceCountRef.current = 0;
+      // 5. Mobile Phone or Foreign Object Detection
+      if (result.phone_detected) {
+        phoneCountRef.current += 1;
+        if (phoneCountRef.current >= 2) {
+          onViolation?.('PHONE_OR_DEVICE_DETECTED', 'Unauthorized mobile phone or foreign object detected in camera frame.');
+          phoneCountRef.current = 0;
         }
       } else {
-        earpieceCountRef.current = 0;
+        phoneCountRef.current = 0;
       }
 
       // 6. Eyewear Check
@@ -175,11 +175,12 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   const isMultiple = analysis.status === 'multiple_faces' || analysis.face_count > 1;
   const isGazeAway = !analysis.looking_at_screen && analysis.face_count === 1;
   const isMismatch = analysis.status === 'face_mismatch' || analysis.face_id_match === false;
+  const isPhone = !!analysis.phone_detected;
 
   return (
     <div
       style={{
-        border: isMultiple || isMismatch || analysis.earpiece_detected
+        border: isMultiple || isMismatch || isPhone
           ? '2px solid #EF4444'
           : isGazeAway
           ? '2px solid #F59E0B'
@@ -187,7 +188,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         borderRadius: 'var(--radius-md)',
         backgroundColor: 'var(--color-surface)',
         overflow: 'hidden',
-        boxShadow: isMultiple || isMismatch
+        boxShadow: isMultiple || isMismatch || isPhone
           ? '0 0 16px rgba(239, 68, 68, 0.45)'
           : isGazeAway
           ? '0 0 12px rgba(245, 158, 11, 0.35)'
@@ -198,8 +199,8 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       <div
         style={{
           padding: '8px 12px',
-          backgroundColor: isMultiple || isMismatch ? '#FEF2F2' : isGazeAway ? '#FFFBEB' : 'var(--color-surface-muted)',
-          borderBottom: isMultiple || isMismatch ? '1px solid #FCA5A5' : isGazeAway ? '1px solid #FCD34D' : '1px solid var(--color-border)',
+          backgroundColor: isMultiple || isMismatch || isPhone ? '#FEF2F2' : isGazeAway ? '#FFFBEB' : 'var(--color-surface-muted)',
+          borderBottom: isMultiple || isMismatch || isPhone ? '1px solid #FCA5A5' : isGazeAway ? '1px solid #FCD34D' : '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
@@ -210,18 +211,18 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
           <span>Where U Elevate AI Proctor</span>
         </div>
 
-        {streamActive && !isMultiple && !isMismatch && analysis.looking_at_screen && analysis.status === 'verified' && (
+        {streamActive && !isMultiple && !isMismatch && !isPhone && analysis.looking_at_screen && analysis.status === 'verified' && (
           <span className="status-badge connected" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
-            <Eye size={12} /> Eyes on Screen
+            <Eye size={12} /> Verified &bull; On Screen
           </span>
         )}
-        {streamActive && isGazeAway && !isMultiple && !isMismatch && (
+        {streamActive && isPhone && (
           <span
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: '4px',
-              backgroundColor: '#F59E0B',
+              backgroundColor: '#DC2626',
               color: '#FFFFFF',
               padding: '2px 8px',
               borderRadius: '4px',
@@ -229,10 +230,10 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
               fontWeight: 700
             }}
           >
-            <EyeOff size={12} /> Gaze: {analysis.gaze_direction}
+            <Smartphone size={12} /> Phone Detected
           </span>
         )}
-        {streamActive && isMismatch && (
+        {streamActive && isMismatch && !isPhone && (
           <span
             style={{
               display: 'inline-flex',
@@ -247,6 +248,23 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
             }}
           >
             <UserX size={12} /> Face ID Mismatch
+          </span>
+        )}
+        {streamActive && isGazeAway && !isMultiple && !isMismatch && !isPhone && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#F59E0B',
+              color: '#FFFFFF',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              fontWeight: 700
+            }}
+          >
+            <EyeOff size={12} /> Gaze: {analysis.gaze_direction}
           </span>
         )}
         {streamActive && isMultiple && (
@@ -312,7 +330,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
 
               return (
                 <div
-                  key={i}
+                  key={`face-${i}`}
                   style={{
                     position: 'absolute',
                     border: `2px solid ${boxColor}`,
@@ -340,12 +358,54 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                     }}
                   >
                     {isMultiple
-                      ? (isFirst ? 'Face #1 (Candidate)' : `Face #${i + 1} (Unauthorized)`)
+                      ? (isFirst ? 'Candidate' : `Unauthorized Face #${i + 1}`)
                       : isMismatch
-                      ? 'Unauthorized Person'
+                      ? 'Unauthorized Substitute Person'
                       : isGazeAway
                       ? 'Candidate (Reading Away)'
-                      : 'Candidate (Verified)'}
+                      : 'Candidate (Verified Face ID)'}
+                  </div>
+                </div>
+              );
+            })}
+
+            {/* Phone / Device Bounding Boxes */}
+            {analysis.phone_boxes && analysis.phone_boxes.map((pBox, i) => {
+              const pLeftPct = (1 - (pBox.x + pBox.width) / fw) * 100;
+              const pTopPct = (pBox.y / fh) * 100;
+              const pWidthPct = (pBox.width / fw) * 100;
+              const pHeightPct = (pBox.height / fh) * 100;
+
+              return (
+                <div
+                  key={`phone-${i}`}
+                  style={{
+                    position: 'absolute',
+                    border: '2px dashed #EF4444',
+                    borderRadius: '4px',
+                    left: `${Math.max(0, pLeftPct)}%`,
+                    top: `${Math.max(0, pTopPct)}%`,
+                    width: `${pWidthPct}%`,
+                    height: `${pHeightPct}%`,
+                    pointerEvents: 'none',
+                    boxShadow: '0 0 12px rgba(239, 68, 68, 0.7)'
+                  }}
+                >
+                  <div
+                    style={{
+                      position: 'absolute',
+                      bottom: '-20px',
+                      left: '0',
+                      backgroundColor: '#DC2626',
+                      color: '#FFF',
+                      fontSize: '10px',
+                      padding: '2px 6px',
+                      borderRadius: '3px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    Unauthorized Phone/Device
                   </div>
                 </div>
               );
@@ -374,29 +434,6 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                 />
               );
             })}
-
-            {/* Real-time Ear Tracking Reticles */}
-            {analysis.ears && analysis.ears.map((ear, i) => {
-              const earLeftPct = (1 - ear.x / fw) * 100;
-              const earTopPct = (ear.y / fh) * 100;
-              return (
-                <div
-                  key={`ear-${i}`}
-                  style={{
-                    position: 'absolute',
-                    left: `${earLeftPct}%`,
-                    top: `${earTopPct}%`,
-                    width: '8px',
-                    height: '8px',
-                    transform: 'translate(-50%, -50%)',
-                    borderRadius: '50%',
-                    backgroundColor: analysis.earpiece_detected ? '#EF4444' : '#4F46E5',
-                    border: '1px solid #FFFFFF',
-                    pointerEvents: 'none'
-                  }}
-                />
-              );
-            })}
           </>
         )}
 
@@ -415,14 +452,14 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
           Biometric Impersonation Alert: Face ID mismatch with enrolled candidate.
         </div>
       )}
-      {!isMultiple && !isMismatch && isGazeAway && (
-        <div style={{ backgroundColor: '#D97706', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
-          Gaze Alert: Looking away from screen ({analysis.gaze_direction}). Please face monitor.
+      {!isMultiple && !isMismatch && isPhone && (
+        <div style={{ backgroundColor: '#B91C1C', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+          Prohibited Device Alert: Mobile phone or foreign object detected in camera view!
         </div>
       )}
-      {analysis.earpiece_detected && (
-        <div style={{ backgroundColor: '#B91C1C', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
-          Earpiece Alert: Concealed audio earpiece detected. Remove all earbuds immediately.
+      {!isMultiple && !isMismatch && !isPhone && isGazeAway && (
+        <div style={{ backgroundColor: '#D97706', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+          Gaze Alert: Looking away from screen ({analysis.gaze_direction}). Please face monitor.
         </div>
       )}
       {analysis.eyewear_detected && (
@@ -436,7 +473,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         <span>
           Face ID:{' '}
           <strong style={{ color: isMismatch ? '#DC2626' : '#059669' }}>
-            {isMismatch ? 'MISMATCH' : 'MATCHED'}
+            {isMismatch ? 'MISMATCH (IMPERSONATION)' : 'VERIFIED MATCH'}
           </strong>
         </span>
       </div>

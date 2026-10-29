@@ -57,9 +57,9 @@ export interface AnalyzeFrameResult {
   gaze_direction?: string;
   looking_at_screen?: boolean;
   eyes?: Array<{ x: number; y: number; name?: string }>;
-  ears?: Array<{ x: number; y: number; name?: string }>;
   eyewear_detected?: boolean;
-  earpiece_detected?: boolean;
+  phone_detected?: boolean;
+  phone_boxes?: BoundingBox[];
   face_id_match?: boolean;
   face_id_similarity?: number;
   frame_width?: number;
@@ -71,11 +71,10 @@ export interface PreExamScanResult {
   face_count: number;
   face_id: string;
   eyewear_detected: boolean;
-  earpiece_detected: boolean;
+  phone_detected: boolean;
   all_passed: boolean;
   details: string;
   face_signature_json?: string;
-  ear_scan?: Record<string, unknown>;
 }
 
 export interface TeacherUnlockResult {

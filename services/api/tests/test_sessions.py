@@ -76,7 +76,7 @@ def test_pre_exam_scan_and_teacher_unlock(client: TestClient, db_session: Sessio
     assert scan_resp.status_code == 200
     scan_data = scan_resp.json()
     assert "face_id" in scan_data
-    assert "earpiece_detected" in scan_data
+    assert "phone_detected" in scan_data
 
     # 2. Create session with Face ID
     sess_resp = client.post("/api/sessions", json={

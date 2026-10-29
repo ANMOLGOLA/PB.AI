@@ -162,31 +162,29 @@ export const ExamRulesPage: React.FC<ExamRulesPageProps> = ({
           >
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
               <span style={{ fontSize: '0.75rem', fontWeight: 700, color: '#991B1B', textTransform: 'uppercase' }}>
-                Rule 3: No Headphones / Devices
+                Rule 3: No Mobile Phones or Devices
               </span>
               <AlertOctagon size={18} color="#EF4444" />
             </div>
 
-            {/* SVG Visual: Headphones & Phone with Slash */}
+            {/* SVG Visual: Phone with Prohibition Slash */}
             <div style={{ width: '100%', height: '140px', backgroundColor: '#FFFFFF', borderRadius: 'var(--radius-md)', border: '1px solid #FECACA', display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: '14px', position: 'relative' }}>
               <svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-                {/* Over-ear headphones */}
-                <path d="M35 55 C35 34 85 34 85 55" stroke="#334155" strokeWidth="3" fill="none" />
-                <rect x="30" y="52" width="10" height="20" rx="3" fill="#0F172A" />
-                <rect x="80" y="52" width="10" height="20" rx="3" fill="#0F172A" />
                 {/* Mobile Phone */}
-                <rect x="52" y="58" width="16" height="28" rx="2" fill="#E2E8F0" stroke="#0F172A" strokeWidth="1.5" />
+                <rect x="44" y="32" width="32" height="56" rx="4" fill="#E2E8F0" stroke="#0F172A" strokeWidth="2.5" />
+                <rect x="48" y="38" width="24" height="42" rx="2" fill="#0F172A" />
+                <circle cx="60" cy="84" r="2" fill="#94A3B8" />
                 {/* Red Prohibition Slash */}
-                <circle cx="60" cy="54" r="38" stroke="#DC2626" strokeWidth="3" />
-                <line x1="33" y1="27" x2="87" y2="81" stroke="#DC2626" strokeWidth="3" />
+                <circle cx="60" cy="60" r="42" stroke="#DC2626" strokeWidth="3.5" />
+                <line x1="30" y1="30" x2="90" y2="90" stroke="#DC2626" strokeWidth="3.5" />
               </svg>
             </div>
 
             <h4 style={{ fontSize: '0.9375rem', fontWeight: 600, color: '#991B1B', marginBottom: '4px' }}>
-              No Earphones or Phones
+              No Mobile Phones or Devices
             </h4>
             <p style={{ fontSize: '0.8125rem', color: '#B91C1C', lineHeight: 1.5 }}>
-              All AirPods, wireless/wired headsets, smartwatches, and smartphones must be powered off and removed from the testing area.
+              Smartphones, tablets, and external devices are detected by real-time computer vision. Any device in frame triggers an integrity alert.
             </p>
           </div>
         </div>

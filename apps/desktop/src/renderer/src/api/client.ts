@@ -62,9 +62,9 @@ export async function createSession(
 }
 
 /**
- * Perform pre-exam candidate biometric identity scan and earpiece/audio device detection.
+ * Perform pre-exam candidate biometric identity scan and environment phone/device detection.
  */
-export async function scanPreExamFaceAndEar(
+export async function scanPreExamFace(
   baseUrl: string,
   imageBase64: string,
   candidateId?: string
@@ -81,6 +81,8 @@ export async function scanPreExamFaceAndEar(
   if (!response.ok) throw new Error(`Pre-exam biometric scan failed: HTTP ${response.status}`);
   return response.json();
 }
+
+export const scanPreExamFaceAndEar = scanPreExamFace;
 
 /**
  * Unlock a session locked out due to reaching 5 integrity warnings using teacher code.

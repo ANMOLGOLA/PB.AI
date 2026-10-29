@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from 'react';
+import React, { useState, useRef, useCallback, useEffect } from 'react';
 import {
   Shield,
   ArrowRight,
@@ -7,11 +7,11 @@ import {
   Camera,
   CheckCircle2,
   AlertTriangle,
-  Headphones,
+  Smartphone,
   Eye,
   RefreshCw
 } from 'lucide-react';
-import { scanPreExamFaceAndEar } from '../api/client';
+import { scanPreExamFace } from '../api/client';
 import { PublicExam, PreExamScanResult } from '../api/types';
 
 interface CandidateOnboardingProps {
@@ -30,7 +30,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const [candidateName, setCandidateName] = useState('Parv Mishra');
   const [candidateId, setCandidateId] = useState('CAND-2026-001');
 
-  // Pre-exam biometric & earpiece scan states
+  // Pre-exam biometric & device scan states
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanResult, setScanResult] = useState<PreExamScanResult | null>(null);
   const [scanError, setScanError] = useState<string | null>(null);
@@ -40,7 +40,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const [cameraActive, setCameraActive] = useState<boolean>(false);
 
   // Initialize camera for self-check & scan
-  React.useEffect(() => {
+  useEffect(() => {
     let currentStream: MediaStream | null = null;
     navigator.mediaDevices?.getUserMedia({ video: { width: 640, height: 480 } })
       .then((stream) => {
@@ -63,7 +63,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
     };
   }, []);
 
-  // Perform Pre-Exam Face & Earpiece Scan
+  // Perform Pre-Exam Face ID & Phone Scan
   const handlePerformScan = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || !cameraActive) return;
     const video = videoRef.current;
@@ -81,7 +81,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
     setIsScanning(true);
     setScanError(null);
     try {
-      const res = await scanPreExamFaceAndEar(backendUrl, dataUrl, candidateId);
+      const res = await scanPreExamFace(backendUrl, dataUrl, candidateId);
       setScanResult(res);
       if (!res.all_passed) {
         setScanError(res.details);
@@ -90,12 +90,22 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
       if (err instanceof Error) {
         setScanError(err.message);
       } else {
-        setScanError('Failed to complete pre-exam scan');
+        setScanError('Failed to complete biometric scan');
       }
     } finally {
       setIsScanning(false);
     }
   }, [backendUrl, candidateId, cameraActive]);
+
+  // Auto-scan once camera activates
+  useEffect(() => {
+    if (cameraActive && !scanResult && !isScanning) {
+      const timer = setTimeout(() => {
+        handlePerformScan();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [cameraActive, scanResult, isScanning, handlePerformScan]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -123,7 +133,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                 Where U Elevate Assessment Center
               </span>
             </div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Biometric Face ID & Earpiece Verification</h2>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Candidate Biometric Face ID Enrollment</h2>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
               {exam.title} &bull; {exam.total_questions} Questions &bull; {exam.duration_minutes} Minutes
             </p>
@@ -175,12 +185,12 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
               <div className="notice-box info" style={{ marginTop: '20px' }}>
                 <Shield size={18} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--color-accent)' }} />
                 <div style={{ fontSize: '0.8125rem', lineHeight: 1.5 }}>
-                  <strong>Security & Integrity Protections:</strong>
+                  <strong>Security &amp; Integrity Protections:</strong>
                   <ul style={{ paddingLeft: '16px', marginTop: '6px' }}>
-                    <li><strong>Candidate Face ID:</strong> Locks exam to your biometric identity so no other person can take it.</li>
-                    <li><strong>Concealed Earpiece Scan:</strong> Inspects ear canals for Bluetooth earbuds, AirPods, and covert audio devices.</li>
-                    <li><strong>Calibrated Gaze Tracking:</strong> MediaPipe tracking tuned for natural on-screen reading.</li>
-                    <li><strong>5-Warning Policy:</strong> 5 integrity warnings lock the exam, requiring Teacher Code unlock.</li>
+                    <li><strong>Candidate Face ID:</strong> Locks exam to your biometric identity. If anyone else sits in your place, impersonation warning triggers immediately.</li>
+                    <li><strong>Phone &amp; Object Detection:</strong> Detects unauthorized mobile phones or objects in frame.</li>
+                    <li><strong>Strict Anti-Escape Lockdown:</strong> Window, Windows key, and Alt+Tab are intercepted.</li>
+                    <li><strong>5-Warning Policy:</strong> Reaching 5 warnings locks the exam, requiring Teacher Code unlock.</li>
                   </ul>
                 </div>
               </div>
@@ -189,7 +199,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
             {/* Right Column: Camera & Pre-Exam Biometric Scan */}
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px' }}>
-                Pre-Exam Face & Earpiece Scan
+                Candidate Face ID Self-Check
               </label>
 
               {/* Video feed with scanning overlay */}
@@ -233,38 +243,6 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                   }}
                 />
 
-                {/* Ear scan guide tags */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '45%',
-                    left: '12px',
-                    fontSize: '0.6875rem',
-                    fontWeight: 700,
-                    color: '#94A3B8',
-                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                    padding: '3px 6px',
-                    borderRadius: '4px'
-                  }}
-                >
-                  [Ear Zone]
-                </div>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '45%',
-                    right: '12px',
-                    fontSize: '0.6875rem',
-                    fontWeight: 700,
-                    color: '#94A3B8',
-                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
-                    padding: '3px 6px',
-                    borderRadius: '4px'
-                  }}
-                >
-                  [Ear Zone]
-                </div>
-
                 {isScanning && (
                   <div
                     style={{
@@ -280,7 +258,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                     }}
                   >
                     <RefreshCw size={28} className="spin-icon" style={{ animation: 'spin 1s linear infinite' }} />
-                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Analyzing Face Biometrics & Earpieces...</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Enrolling Candidate Biometrics...</span>
                   </div>
                 )}
               </div>
@@ -307,7 +285,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                   }}
                 >
                   {isScanPassed ? <CheckCircle2 size={16} color="#10B981" /> : <Camera size={16} />}
-                  <span>{isScanPassed ? 'Re-scan Biometrics' : 'Scan Face & Check Earpieces'}</span>
+                  <span>{isScanPassed ? 'Re-enroll Face ID' : 'Capture & Enroll Face ID'}</span>
                 </button>
               </div>
 
@@ -325,19 +303,19 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                 >
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: isScanPassed ? '#065F46' : '#991B1B' }}>
                     {isScanPassed ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
-                    <span>{isScanPassed ? 'Biometrics & Audio Scan Verified' : 'Scan Flagged Issues'}</span>
+                    <span>{isScanPassed ? 'Candidate Face ID Enrolled & Active' : 'Face Enrollment Incomplete'}</span>
                   </div>
 
                   <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: '1fr', gap: '4px', color: 'var(--color-text-primary)' }}>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <span style={{ fontWeight: 600 }}>Face ID Token:</span>
+                      <span style={{ fontWeight: 600 }}>Enrolled Token:</span>
                       <code style={{ fontSize: '0.75rem', backgroundColor: '#FFFFFF', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>
                         {scanResult.face_id}
                       </code>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                      <Headphones size={14} color={scanResult.earpiece_detected ? '#DC2626' : '#10B981'} />
-                      <span>Earpiece Scan: {scanResult.earpiece_detected ? 'Concealed earpiece detected!' : 'Clear (No earbuds/earpieces)'}</span>
+                      <Smartphone size={14} color={scanResult.phone_detected ? '#DC2626' : '#10B981'} />
+                      <span>Phone Check: {scanResult.phone_detected ? 'Unauthorized phone detected in frame!' : 'Clear (No phones detected)'}</span>
                     </div>
                     <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                       <Eye size={14} color={scanResult.eyewear_detected ? '#DC2626' : '#10B981'} />
@@ -361,7 +339,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
               {isScanPassed ? (
                 <span style={{ color: '#059669', fontWeight: 600 }}>✓ Face ID enrolled. Ready to enter exam.</span>
               ) : (
-                <span>Click &quot;Scan Face &amp; Check Earpieces&quot; before continuing.</span>
+                <span>Camera active. Enrolling candidate face...</span>
               )}
             </div>
             <button

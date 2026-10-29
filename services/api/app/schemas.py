@@ -120,16 +120,16 @@ class AnalyzeFrameResponse(BaseModel):
     gaze_direction: str  # "CENTER", "LOOKING_LEFT", "LOOKING_RIGHT", "LOOKING_DOWN", "LOOKING_UP"
     looking_at_screen: bool
     eyes: List[EyeCoord] = []
-    ears: List[EyeCoord] = []
     eyewear_detected: bool = False
-    earpiece_detected: bool = False
+    phone_detected: bool = False
+    phone_boxes: List[BoundingBox] = []
     face_id_match: bool = True
     face_id_similarity: float = 1.0
     frame_width: Optional[int] = 640
     frame_height: Optional[int] = 480
 
 
-# --- Pre-Exam Biometric & Ear Scan Schemas ---
+# --- Pre-Exam Biometric Scan Schemas ---
 
 class PreExamScanRequest(BaseModel):
     image_base64: str
@@ -141,11 +141,10 @@ class PreExamScanResponse(BaseModel):
     face_count: int
     face_id: str
     eyewear_detected: bool
-    earpiece_detected: bool
+    phone_detected: bool
     all_passed: bool
     details: str
     face_signature_json: Optional[str] = None
-    ear_scan: Dict[str, Any] = {}
 
 
 class EnrollFaceRequest(BaseModel):

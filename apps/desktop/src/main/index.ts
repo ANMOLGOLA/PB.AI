@@ -4,6 +4,25 @@ import { setupSecurityPolicies } from './security';
 
 let mainWindow: BrowserWindow | null = null;
 let isExamLocked = false;
+let lockdownWatchdog: NodeJS.Timeout | null = null;
+
+function forceReclaimFocus(): void {
+  if (!mainWindow || mainWindow.isDestroyed() || !isExamLocked) return;
+  try {
+    if (!mainWindow.isFullScreen()) {
+      mainWindow.setFullScreen(true);
+    }
+    if (!mainWindow.isKiosk()) {
+      mainWindow.setKiosk(true);
+    }
+    mainWindow.setAlwaysOnTop(true, 'screen-saver', 9999);
+    mainWindow.moveTop();
+    mainWindow.show();
+    mainWindow.focus();
+  } catch (err) {
+    console.warn('[Lockdown] Failed to reclaim focus:', err);
+  }
+}
 
 function createWindow(): void {
   mainWindow = new BrowserWindow({
@@ -25,21 +44,23 @@ function createWindow(): void {
   // Apply defensive process security and anti-overlay policies
   setupSecurityPolicies(mainWindow);
 
-  // Monitor window focus/blur for telemetry signals and force reclaim in exam mode
+  // Monitor window focus/blur for telemetry signals and force immediate reclaim in exam mode
   mainWindow.on('blur', () => {
     mainWindow?.webContents.send('window-focus-change', {
       focused: false,
       timestamp: Date.now()
     });
 
-    // In lockdown exam mode, immediately reclaim focus and return to top
     if (isExamLocked && mainWindow) {
-      setTimeout(() => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.focus();
-          mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-        }
-      }, 50);
+      mainWindow.webContents.send('security-alert', {
+        type: 'WINDOW_BLUR_ATTEMPT',
+        message: 'Window focus switch attempt detected and suppressed.',
+        timestamp: Date.now()
+      });
+      // Aggressively force focus back immediately
+      forceReclaimFocus();
+      setTimeout(forceReclaimFocus, 30);
+      setTimeout(forceReclaimFocus, 100);
     }
   });
 
@@ -58,8 +79,7 @@ function createWindow(): void {
     mainWindow?.webContents.send('fullscreen-change', { isFullScreen: false });
     if (isExamLocked && mainWindow) {
       // Instantly restore kiosk & fullscreen if candidate attempts to break out
-      mainWindow.setFullScreen(true);
-      mainWindow.setKiosk(true);
+      forceReclaimFocus();
       mainWindow.webContents.send('security-alert', {
         type: 'FULLSCREEN_EXIT_ATTEMPT',
         message: 'Lockdown breach: Full-screen exit attempt was blocked and logged.',
@@ -73,15 +93,25 @@ function createWindow(): void {
     if (isExamLocked) {
       const blockedKeys = [
         'F11', 'F12', 'Escape', 'Alt', 'Meta', 'Tab',
-        'PrintScreen', 'ContextMenu'
+        'PrintScreen', 'ContextMenu', 'Windows'
       ];
-      if (blockedKeys.includes(input.key) || (input.alt && input.key === 'Tab') || (input.control && input.shift && input.key === 'I')) {
+      if (
+        blockedKeys.includes(input.key) ||
+        input.key === 'Escape' ||
+        input.key === 'Meta' ||
+        input.meta ||
+        (input.alt && input.key === 'Tab') ||
+        (input.control && input.key === 'Escape') ||
+        (input.alt && input.key === 'F4') ||
+        (input.control && input.shift && input.key === 'I')
+      ) {
         event.preventDefault();
         mainWindow?.webContents.send('security-alert', {
           type: 'LOCKDOWN_KEY_BLOCKED',
           message: `Blocked restricted key combination: ${input.key}`,
           timestamp: Date.now()
         });
+        forceReclaimFocus();
       }
     }
   });
@@ -112,6 +142,10 @@ function createWindow(): void {
   });
 
   mainWindow.on('closed', () => {
+    if (lockdownWatchdog) {
+      clearInterval(lockdownWatchdog);
+      lockdownWatchdog = null;
+    }
     mainWindow = null;
   });
 }
@@ -123,25 +157,65 @@ ipcMain.handle('set-fullscreen', (_event, enable: boolean) => {
     if (enable) {
       mainWindow.setKiosk(true);
       mainWindow.setFullScreen(true);
-      mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      mainWindow.setAlwaysOnTop(true, 'screen-saver', 9999);
       mainWindow.setMinimizable(false);
       mainWindow.setMovable(false);
+      mainWindow.setClosable(false);
+      mainWindow.setFullScreenable(false);
+      mainWindow.setSkipTaskbar(true); // Prevent Windows taskbar from overlaying
 
-      // Register global shortcut traps
-      globalShortcut.registerAll(['Alt+Tab', 'F11', 'CommandOrControl+Shift+I'], () => {
-        mainWindow?.webContents.send('security-alert', {
-          type: 'GLOBAL_HOTKEY_BLOCKED',
-          message: 'System hotkey intercepted by exam lockdown.',
-          timestamp: Date.now()
-        });
-      });
+      // Register global shortcut traps to catch Windows key combinations & Alt+Tab
+      const trapShortcuts = [
+        'Alt+Tab',
+        'Alt+Escape',
+        'Control+Escape',
+        'F11',
+        'Escape',
+        'Alt+F4',
+        'PrintScreen',
+        'CommandOrControl+Shift+I'
+      ];
+
+      for (const sc of trapShortcuts) {
+        try {
+          globalShortcut.register(sc, () => {
+            mainWindow?.webContents.send('security-alert', {
+              type: 'GLOBAL_HOTKEY_BLOCKED',
+              message: `System shortcut ${sc} intercepted by exam lockdown.`,
+              timestamp: Date.now()
+            });
+            forceReclaimFocus();
+          });
+        } catch {
+          // Some keys might already be registered by OS
+        }
+      }
+
+      // Continuous Focus & Fullscreen Watchdog (ensures Windows Start menu or background app cannot steal focus)
+      if (lockdownWatchdog) clearInterval(lockdownWatchdog);
+      lockdownWatchdog = setInterval(() => {
+        if (isExamLocked && mainWindow && !mainWindow.isDestroyed()) {
+          if (!mainWindow.isFocused() || !mainWindow.isFullScreen() || !mainWindow.isKiosk()) {
+            forceReclaimFocus();
+          }
+        }
+      }, 150);
+
+      forceReclaimFocus();
     } else {
+      if (lockdownWatchdog) {
+        clearInterval(lockdownWatchdog);
+        lockdownWatchdog = null;
+      }
       globalShortcut.unregisterAll();
       mainWindow.setKiosk(false);
       mainWindow.setFullScreen(false);
       mainWindow.setAlwaysOnTop(false);
       mainWindow.setMinimizable(true);
       mainWindow.setMovable(true);
+      mainWindow.setClosable(true);
+      mainWindow.setFullScreenable(true);
+      mainWindow.setSkipTaskbar(false);
     }
     return mainWindow.isFullScreen();
   }
@@ -173,6 +247,10 @@ app.whenReady().then(() => {
 });
 
 app.on('will-quit', () => {
+  if (lockdownWatchdog) {
+    clearInterval(lockdownWatchdog);
+    lockdownWatchdog = null;
+  }
   globalShortcut.unregisterAll();
 });
 

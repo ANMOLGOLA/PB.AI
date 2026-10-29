@@ -34,14 +34,14 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
   const [secondsRemaining, setSecondsRemaining] = useState<number>(exam.duration_minutes * 60);
 
-  // Granular incident counts
+  // Granular incident counts (Tracking all violation categories)
   const [incidentCounts, setIncidentCounts] = useState<{
     blur: number;
     face: number;
     multiple: number;
     gaze: number;
     eyewear: number;
-    earpiece: number;
+    phone: number;
     impersonation: number;
   }>({
     blur: 0,
@@ -49,7 +49,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
     multiple: 0,
     gaze: 0,
     eyewear: 0,
-    earpiece: 0,
+    phone: 0,
     impersonation: 0
   });
 
@@ -72,7 +72,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
     incidentCounts.multiple +
     incidentCounts.gaze +
     incidentCounts.eyewear +
-    incidentCounts.earpiece +
+    incidentCounts.phone +
     incidentCounts.impersonation;
 
   // Check if warnings hit the maximum threshold of 5
@@ -139,18 +139,18 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
     } else if (type === 'FACE_MISMATCH_IMPERSONATION') {
       setIncidentCounts((prev) => ({ ...prev, impersonation: prev.impersonation + 1 }));
       setShowWarningModal('Biometric Impersonation Alert: Face does not match candidate Face ID enrolled.');
-      logEvent(backendUrl, session.id, type, 'mediapipe_biometrics', 'critical', 0.92, { message });
-    } else if (type === 'EARPIECE_DETECTED') {
-      setIncidentCounts((prev) => ({ ...prev, earpiece: prev.earpiece + 1 }));
-      setShowWarningModal('Audio Device Alert: Concealed Bluetooth earbud or earpiece detected.');
-      logEvent(backendUrl, session.id, type, 'auricular_vision_scanner', 'high', 0.94, { message });
+      logEvent(backendUrl, session.id, type, 'mediapipe_biometrics', 'critical', 0.94, { message });
+    } else if (type === 'PHONE_OR_DEVICE_DETECTED') {
+      setIncidentCounts((prev) => ({ ...prev, phone: prev.phone + 1 }));
+      setShowWarningModal('Prohibited Device Alert: Mobile phone or foreign object detected in camera view!');
+      logEvent(backendUrl, session.id, type, 'device_vision_scanner', 'critical', 0.90, { message });
     } else if (type === 'RESTRICTED_EYEWEAR_DETECTED') {
       setIncidentCounts((prev) => ({ ...prev, eyewear: prev.eyewear + 1 }));
       setShowWarningModal('Restricted Eyewear Alert: Tinted or dark glasses detected. Please remove them.');
       logEvent(backendUrl, session.id, type, 'opencv_vision_analyzer', 'high', 0.90, { message });
-    } else if (type === 'WINDOW_BLUR' || type === 'FULLSCREEN_EXIT' || type === 'LOCKDOWN_KEY_BLOCKED') {
+    } else if (type === 'WINDOW_BLUR' || type === 'WINDOW_BLUR_ATTEMPT' || type === 'FULLSCREEN_EXIT' || type === 'FULLSCREEN_EXIT_ATTEMPT' || type === 'LOCKDOWN_KEY_BLOCKED' || type === 'GLOBAL_HOTKEY_BLOCKED') {
       setIncidentCounts((prev) => ({ ...prev, blur: prev.blur + 1 }));
-      setShowWarningModal('Lockdown Violation: Moving out of the exam or switching windows is prohibited.');
+      setShowWarningModal('Lockdown Violation: Moving out of the exam or switching windows / Windows key is prohibited.');
       logEvent(backendUrl, session.id, type, 'electron_lockdown', 'critical', 1.0, { message });
     }
   }, [backendUrl, session.id, isLockedOut]);
@@ -199,7 +199,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
         multiple: 0,
         gaze: 0,
         eyewear: 0,
-        earpiece: 0,
+        phone: 0,
         impersonation: 0
       });
       setIsLockedOut(false);
@@ -497,7 +497,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
                   onClick={() => setShowSubmitConfirm(true)}
                   disabled={isSubmitting || isLockedOut}
                 >
-                  <span>Review & Submit</span>
+                  <span>Review &amp; Submit</span>
                   <Send size={16} />
                 </button>
               )}
@@ -534,7 +534,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
                 </span>
               </div>
               <div className="meta-row">
-                <span className="meta-label">Window Switch Attempts</span>
+                <span className="meta-label">Window Switch / Windows Key</span>
                 <span className="meta-value" style={{ color: incidentCounts.blur > 0 ? '#DC2626' : 'inherit' }}>
                   {incidentCounts.blur}
                 </span>
@@ -558,9 +558,9 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
                 </span>
               </div>
               <div className="meta-row">
-                <span className="meta-label">Earpiece / Audio Alerts</span>
-                <span className="meta-value" style={{ color: incidentCounts.earpiece > 0 ? '#DC2626' : 'inherit' }}>
-                  {incidentCounts.earpiece}
+                <span className="meta-label">Phone / Device Detected</span>
+                <span className="meta-value" style={{ color: incidentCounts.phone > 0 ? '#DC2626' : 'inherit' }}>
+                  {incidentCounts.phone}
                 </span>
               </div>
               <div className="meta-row">
@@ -572,7 +572,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
             </div>
 
             <div style={{ marginTop: '14px', fontSize: '0.75rem', color: 'var(--color-text-tertiary)', lineHeight: 1.4 }}>
-              Protected against Discord/OBS overlays via hardware Content Protection. Window switching is permanently trapped.
+              Protected against Windows key &amp; Alt+Tab escapes via aggressive watchdog. Phone and impersonation checks active.
             </div>
           </div>
         </div>
@@ -626,7 +626,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
               Warning Count: {totalWarnings} / 5. (At 5 warnings, the assessment will be permanently locked out).
             </div>
             <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', marginBottom: '24px', lineHeight: 1.5 }}>
-              You are in mandatory full-screen lockdown. You cannot switch windows, move out of the exam, or look away from the monitor. This violation is logged in your permanent assessment timeline.
+              You are in mandatory full-screen lockdown. You cannot switch windows, move out of the exam, use a phone, or look away from the monitor. This violation is logged in your permanent assessment timeline.
             </p>
             <button
               type="button"
@@ -711,11 +711,11 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
               </strong>
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '6px', color: '#64748B' }}>
                 <div>Eye Gaze Deviations: <strong>{incidentCounts.gaze}</strong></div>
-                <div>Window Blur / Alt+Tab: <strong>{incidentCounts.blur}</strong></div>
+                <div>Window Switch / Blur: <strong>{incidentCounts.blur}</strong></div>
                 <div>Face Absences: <strong>{incidentCounts.face}</strong></div>
                 <div>Multiple Faces: <strong>{incidentCounts.multiple}</strong></div>
                 <div>Face ID Mismatch: <strong>{incidentCounts.impersonation}</strong></div>
-                <div>Earpiece / Audio: <strong>{incidentCounts.earpiece}</strong></div>
+                <div>Phone / Device: <strong>{incidentCounts.phone}</strong></div>
               </div>
             </div>
 

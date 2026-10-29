@@ -85,17 +85,16 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
 @router.post("/proctor/pre-exam-scan", response_model=PreExamScanResponse)
 def pre_exam_scan(payload: PreExamScanRequest):
     """
-    Performs pre-exam candidate biometric identity enrollment and audio hardware inspection.
+    Performs pre-exam candidate biometric identity enrollment and environment inspection.
     Scans for:
       1. Centered single face for Face ID biometric token generation.
-      2. Concealed Bluetooth earpieces, AirPods, or audio devices in ear canals.
+      2. Prohibited mobile phones or foreign devices in frame.
       3. Prohibited dark sunglasses / tinted eyewear.
     """
     analysis = analyze_camera_frame(payload.image_base64)
     face_count = analysis.get("face_count", 0)
     eyewear_detected = analysis.get("eyewear_detected", False)
-    ear_scan = analysis.get("ear_scan", {})
-    earpiece_detected = analysis.get("earpiece_detected", False)
+    phone_detected = analysis.get("phone_detected", False)
 
     face_sig = analysis.get("face_signature") or {}
     face_id = face_sig.get("face_id", f"FID-{uuid.uuid4().hex[:8].upper()}")
@@ -107,22 +106,21 @@ def pre_exam_scan(payload: PreExamScanRequest):
         issues.append("Multiple faces detected in frame.")
     if eyewear_detected:
         issues.append("Tinted eyewear or sunglasses detected. Please remove them.")
-    if earpiece_detected:
-        issues.append("Concealed earpiece or audio device detected near ear. Please remove all earbuds.")
+    if phone_detected:
+        issues.append("Unauthorized mobile phone or foreign object detected in frame. Please put all devices away.")
 
     all_passed = len(issues) == 0
-    details = "Biometric Face ID generated and earpiece scan clear." if all_passed else " | ".join(issues)
+    details = "Biometric Face ID registered and environment clear." if all_passed else " | ".join(issues)
 
     return PreExamScanResponse(
         face_detected=face_count > 0,
         face_count=face_count,
         face_id=face_id,
         eyewear_detected=eyewear_detected,
-        earpiece_detected=earpiece_detected,
+        phone_detected=phone_detected,
         all_passed=all_passed,
         details=details,
-        face_signature_json=json.dumps(face_sig) if face_sig else None,
-        ear_scan=ear_scan
+        face_signature_json=json.dumps(face_sig) if face_sig else None
     )
 
 
@@ -348,7 +346,7 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
       - Face presence & count
       - Gaze orientation (calibrated for natural reading)
       - Dark/tinted sunglasses check
-      - Concealed audio earpiece check
+      - Unauthorized mobile phone & foreign device detection
       - Biometric Face ID anti-impersonation verification
     """
     enrolled_sig = None
@@ -359,6 +357,27 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
             enrolled_sig = exam_session.face_signature
 
     analysis = analyze_camera_frame(payload.image_base64, enrolled_signature=enrolled_sig)
+
+    # AUTO-ENROLLMENT GUARD: If session does not yet have Face ID enrolled,
+    # automatically lock to the first valid single face that appears in the assessment!
+    if exam_session and not exam_session.face_signature and analysis["face_count"] == 1:
+        if analysis.get("face_signature"):
+            exam_session.face_id = analysis["face_signature"]["face_id"]
+            exam_session.face_signature = json.dumps(analysis["face_signature"])
+            enroll_event = IntegrityEvent(
+                id=str(uuid.uuid4()),
+                session_id=exam_session.id,
+                event_type="FACE_ID_ENROLLED",
+                source="mediapipe_biometrics",
+                severity="info",
+                confidence=0.99,
+                metadata_json=json.dumps({
+                    "face_id": exam_session.face_id,
+                    "reason": "Automated first-frame biometric Face ID enrollment"
+                })
+            )
+            db.add(enroll_event)
+            db.commit()
 
     # Auto-log anomalous signals if linked to active session
     if exam_session and exam_session.status == "active":
@@ -399,7 +418,7 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
                 occurred_at=datetime.now(timezone.utc),
                 source="mediapipe_biometrics",
                 severity="critical",
-                confidence=0.92,
+                confidence=0.94,
                 metadata_json=json.dumps({
                     "reason": "Active candidate face does not match enrolled Face ID",
                     "similarity": analysis.get("face_id_similarity", 0.0)
@@ -407,17 +426,17 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
             )
             db.add(event)
             db.commit()
-        elif analysis.get("earpiece_detected", False):
+        elif analysis.get("phone_detected", False):
             event = IntegrityEvent(
                 id=str(uuid.uuid4()),
                 session_id=payload.session_id,
-                event_type="EARPIECE_DETECTED",
+                event_type="PHONE_OR_DEVICE_DETECTED",
                 occurred_at=datetime.now(timezone.utc),
-                source="auricular_vision_scanner",
-                severity="high",
-                confidence=0.94,
+                source="device_vision_scanner",
+                severity="critical",
+                confidence=0.90,
                 metadata_json=json.dumps({
-                    "reason": "Concealed earpiece or audio device detected in ear region"
+                    "reason": "Unauthorized mobile phone or foreign object detected in camera view"
                 })
             )
             db.add(event)
@@ -447,9 +466,9 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
         gaze_direction=analysis.get("gaze_direction", "CENTER"),
         looking_at_screen=analysis.get("looking_at_screen", True),
         eyes=analysis.get("eyes", []),
-        ears=analysis.get("ears", []),
         eyewear_detected=analysis.get("eyewear_detected", False),
-        earpiece_detected=analysis.get("earpiece_detected", False),
+        phone_detected=analysis.get("phone_detected", False),
+        phone_boxes=analysis.get("phone_boxes", []),
         face_id_match=analysis.get("face_id_match", True),
         face_id_similarity=analysis.get("face_id_similarity", 1.0),
         frame_width=analysis.get("frame_width", 640),
