@@ -7,6 +7,9 @@
     "apps/*"
   ],
   "scripts": {
+    "start": "electron apps/desktop",
+    "desktop": "electron apps/desktop",
+    "desktop:run": "electron apps/desktop",
     "desktop:install": "npm install --workspace=apps/desktop",
     "desktop:build": "npm run build --workspace=apps/desktop",
     "desktop:check": "npm run typecheck --workspace=apps/desktop",
