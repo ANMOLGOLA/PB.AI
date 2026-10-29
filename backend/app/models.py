@@ -63,8 +63,11 @@ class ExamSession(Base):
     exam_id = Column(String(36), ForeignKey("exams.id", ondelete="CASCADE"), nullable=False)
     candidate_name = Column(String(255), nullable=False)
     candidate_id = Column(String(100), nullable=False)
-    status = Column(String(30), default="active", nullable=False)  # "active", "submitted"
+    status = Column(String(30), default="active", nullable=False)  # "active", "submitted", "locked"
     score = Column(Integer, nullable=True)  # Populated only on submit
+    face_id = Column(String(50), nullable=True)  # Unique biometric enrollment Face ID (e.g., FID-7A39-E401)
+    face_signature = Column(Text, nullable=True)  # Base64/JSON biometric landmark signature
+    is_locked = Column(Integer, default=0, nullable=False)  # 1 when candidate reaches 5 violations
     started_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
     submitted_at = Column(DateTime, nullable=True)
 
@@ -90,9 +93,9 @@ class IntegrityEvent(Base):
 
     id = Column(String(36), primary_key=True, index=True)
     session_id = Column(String(36), ForeignKey("sessions.id", ondelete="CASCADE"), nullable=False)
-    event_type = Column(String(50), nullable=False)  # "WINDOW_BLUR", "NO_FACE_DETECTED", "MULTIPLE_FACES_DETECTED", "FULLSCREEN_EXIT"
+    event_type = Column(String(50), nullable=False)  # "WINDOW_BLUR", "NO_FACE_DETECTED", "MULTIPLE_FACES_DETECTED", "FULLSCREEN_EXIT", "GAZE_AWAY_FROM_SCREEN", "EARPIECE_DETECTED", "FACE_MISMATCH_IMPERSONATION"
     occurred_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False)
-    source = Column(String(50), nullable=False)  # "electron_main", "opencv_cv_engine", "web_telemetry"
+    source = Column(String(50), nullable=False)  # "electron_main", "opencv_cv_engine", "web_telemetry", "mediapipe_biometrics"
     severity = Column(String(20), nullable=False)  # "info", "low", "medium", "high", "critical"
     confidence = Column(Float, nullable=False, default=1.0)
     metadata_json = Column(Text, default="{}")

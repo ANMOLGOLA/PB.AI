@@ -44,6 +44,8 @@ class CreateSessionRequest(BaseModel):
     exam_id: str
     candidate_name: str
     candidate_id: str
+    face_id: Optional[str] = None
+    face_signature: Optional[str] = None
 
 
 class SessionResponse(BaseModel):
@@ -52,6 +54,8 @@ class SessionResponse(BaseModel):
     candidate_name: str
     candidate_id: str
     status: str
+    face_id: Optional[str] = None
+    is_locked: int = 0
     started_at: datetime
     duration_minutes: int
 
@@ -111,14 +115,59 @@ class AnalyzeFrameResponse(BaseModel):
     face_detected: bool
     face_count: int
     confidence: float
-    status: str  # "verified", "no_face", "multiple_faces"
+    status: str  # "verified", "no_face", "multiple_faces", "face_mismatch"
     bounding_boxes: List[BoundingBox]
     gaze_direction: str  # "CENTER", "LOOKING_LEFT", "LOOKING_RIGHT", "LOOKING_DOWN", "LOOKING_UP"
     looking_at_screen: bool
     eyes: List[EyeCoord] = []
     eyewear_detected: bool = False
+    phone_detected: bool = False
+    phone_boxes: List[BoundingBox] = []
+    face_id_match: bool = True
+    face_id_similarity: float = 1.0
     frame_width: Optional[int] = 640
     frame_height: Optional[int] = 480
+    latency_ms: Optional[float] = 10.0
+    engine: Optional[str] = "local_mediapipe_realtime"
+
+
+# --- Pre-Exam Biometric Scan Schemas ---
+
+class PreExamScanRequest(BaseModel):
+    image_base64: str
+    candidate_id: Optional[str] = None
+
+
+class PreExamScanResponse(BaseModel):
+    face_detected: bool
+    face_count: int
+    face_id: str
+    eyewear_detected: bool
+    phone_detected: bool
+    all_passed: bool
+    details: str
+    face_signature_json: Optional[str] = None
+
+
+class EnrollFaceRequest(BaseModel):
+    image_base64: str
+
+
+class EnrollFaceResponse(BaseModel):
+    face_id: str
+    status: str
+    confidence: float
+    message: str
+
+
+class TeacherUnlockRequest(BaseModel):
+    teacher_code: str
+
+
+class TeacherUnlockResponse(BaseModel):
+    unlocked: bool
+    session_id: str
+    message: str
 
 
 class SubmitSessionResponse(BaseModel):
@@ -130,3 +179,22 @@ class SubmitSessionResponse(BaseModel):
     submitted_at: datetime
     events_summary: Dict[str, int]
     events: List[EventResponse]
+
+
+# --- Layer C: Optional Secondary Forensic Review Schemas ---
+
+class IncidentReviewRequest(BaseModel):
+    image_base64: str
+    incident_context: Optional[str] = None
+    preferred_provider: Optional[str] = None
+
+
+class IncidentReviewResponse(BaseModel):
+    provider_name: str
+    model_name: str
+    status: str
+    semantic_summary: Optional[str] = None
+    observations: Dict[str, Any] = {}
+    latency_ms: float = 0.0
+    error_message: Optional[str] = None
+    unverified_by_examiner: bool = True
