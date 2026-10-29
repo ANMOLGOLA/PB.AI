@@ -20,6 +20,7 @@ export function setupSecurityPolicies(mainWindow: BrowserWindow): void {
         ...details.responseHeaders,
         'Content-Security-Policy': [
           "default-src 'self'; " +
+          "script-src 'self' 'unsafe-inline' 'unsafe-eval'; " +
           "connect-src 'self' http://127.0.0.1:8000 http://localhost:8000 ws://127.0.0.1:8000 ws://localhost:8000; " +
           "style-src 'self' 'unsafe-inline'; " +
           "font-src 'self' data:; " +

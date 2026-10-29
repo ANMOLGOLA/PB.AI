@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Layers, LogOut } from 'lucide-react';
+import { LogOut } from 'lucide-react';
 
 interface HeaderProps {
   currentStep?: number;
@@ -308,6 +308,9 @@ export const Header: React.FC<HeaderProps> = ({
                   <input type="checkbox" defaultChecked />
                   <span>Play gentle chime on proctor notifications</span>
                 </label>
+              </div>
+              <div className="settings-field" style={{ marginTop: "16px", fontSize: "12px", color: "#64748B" }}>
+                <span>Sentinel Desktop v{appVersion || "0.1.0"} ({platform || "Windows"})</span>
               </div>
             </div>
             <div className="settings-modal-footer">

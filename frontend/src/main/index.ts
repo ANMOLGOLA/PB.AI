@@ -125,6 +125,12 @@ function createWindow(): void {
   // Apply defensive process security and anti-overlay policies
   setupSecurityPolicies(mainWindow);
 
+  // Pipe renderer console messages to main terminal
+  mainWindow.webContents.on('console-message', (_event, level, message, line, sourceId) => {
+    const levelStr = ['VERBOSE', 'INFO', 'WARNING', 'ERROR'][level] || 'LOG';
+    console.log(`[Renderer - ${levelStr}] ${message} (${path.basename(sourceId)}:${line})`);
+  });
+
   // Suppress right-click context menu so student cannot open developer inspection
   mainWindow.webContents.on('context-menu', (event) => {
     event.preventDefault();

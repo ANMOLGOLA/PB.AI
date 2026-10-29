@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Globe, ArrowLeft, ArrowRight, RotateCw, ExternalLink, ShieldCheck } from 'lucide-react';
+import { Globe, ArrowLeft, ArrowRight, RotateCw, ShieldCheck } from 'lucide-react';
 
 interface ManagedBrowserTabProps {
   onTelemetryEvent: (eventType: string, metadata: Record<string, any>) => void;
@@ -208,6 +208,7 @@ export const ManagedBrowserTab: React.FC<ManagedBrowserTabProps> = ({ onTelemetr
       {/* Sandboxed Webview Surface */}
       <div style={{ flex: 1, position: 'relative', width: '100%', minHeight: 0, overflow: 'hidden' }}>
         <webview
+          preload={preloadPath || undefined}
           ref={webviewRef}
           src={currentUrl}
           partition="persist:managed_browsing"

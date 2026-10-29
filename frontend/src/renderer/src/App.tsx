@@ -87,21 +87,28 @@ export const App: React.FC = () => {
 
   // WebRTC Screen & Camera Streaming hook
   const {
-    screenShareState,
-    screenShareSourceName,
-    screenShareError,
+    state: screenShareState,
+    sourceName: screenShareSourceName,
+    errorMessage: screenShareError,
     webcamStream,
-    startScreenShare,
-    stopScreenShare
-  } = useScreenShare(backendUrl, activeSession?.id);
+    startSharing: startScreenShare,
+    stopSharing: stopScreenShare
+  } = useScreenShare({
+    backendUrl,
+    sessionId: activeSession?.id || ''
+  });
 
   const [screenShareErrorOverride, setScreenShareErrorOverride] = useState<string | null>(null);
 
   // Read environment metadata from desktop preload bridge
   useEffect(() => {
-    if (window.sentinelBridge) {
-      setPlatform(window.sentinelBridge.platform);
-      window.sentinelBridge.getAppVersion().then(setAppVersion).catch(() => {});
+    if (window.sentinelBridge && window.sentinelBridge.getSystemInfo) {
+      window.sentinelBridge.getSystemInfo().then((info) => {
+        if (info) {
+          setPlatform(info.platform || '');
+          setAppVersion(info.appVersion || '0.1.0');
+        }
+      }).catch(() => {});
     }
   }, []);
 
@@ -135,7 +142,7 @@ export const App: React.FC = () => {
   const handleStartScreenShare = async (source: ScreenSource | null, cameraStream?: MediaStream | null) => {
     setScreenShareErrorOverride(null);
     try {
-      await startScreenShare(source, cameraStream);
+      await startScreenShare(source, cameraStream, activeSession?.id);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Failed to initialize screen sharing.';
       setScreenShareErrorOverride(msg);
@@ -193,6 +200,8 @@ export const App: React.FC = () => {
           onNavigateToTest={() => navigate('/test')}
           onNavigateHome={() => navigate('/')}
           firstName={candidateName || 'Candidate'}
+          platform={platform}
+          appVersion={appVersion}
         />
         <main>
           <WhereUElevateLanding onNavigateToTest={() => navigate('/test')} />
