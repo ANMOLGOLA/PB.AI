@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, AlertTriangle, CheckCircle, Users } from 'lucide-react';
+import { Camera, AlertTriangle, Users, Eye, EyeOff } from 'lucide-react';
 import { analyzeFrame } from '../api/client';
 import { AnalyzeFrameResult } from '../api/types';
 
@@ -27,11 +27,15 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     confidence: 0.98,
     status: 'verified',
     bounding_boxes: [],
+    gaze_direction: 'CENTER',
+    looking_at_screen: true,
+    eyes: [],
+    eyewear_detected: false,
     frame_width: 640,
     frame_height: 480
   });
 
-  // Start webcam with high quality for reliable face detection
+  // Start webcam with high quality for reliable face & eye tracking
   useEffect(() => {
     let currentStream: MediaStream | null = null;
 
@@ -65,7 +69,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     };
   }, []);
 
-  // Frame capture and deep-learning MediaPipe + OpenCV face analysis
+  // Frame capture and deep-learning MediaPipe + Eye Tracking face analysis
   const captureAndAnalyze = useCallback(async () => {
     if (!videoRef.current || !canvasRef.current || !streamActive || isProcessing) return;
 
@@ -73,7 +77,6 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     const canvas = canvasRef.current;
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-    // Use 640x480 for sharp secondary face detection
     const targetW = 640;
     const targetH = 480;
     canvas.width = targetW;
@@ -93,15 +96,19 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         onViolation?.('NO_FACE_DETECTED', 'Candidate face is not detected in camera frame.');
       } else if (result.status === 'multiple_faces' || result.face_count > 1) {
         onViolation?.('MULTIPLE_FACES_DETECTED', `Multiple individuals (${result.face_count} faces) detected in proctoring feed.`);
+      } else if (!result.looking_at_screen && result.face_count === 1) {
+        onViolation?.('GAZE_AWAY_FROM_SCREEN', `Candidate looking away from screen (${result.gaze_direction}).`);
+      } else if (result.eyewear_detected) {
+        onViolation?.('RESTRICTED_EYEWEAR_DETECTED', 'Tinted eyewear or sunglasses detected covering eyes.');
       }
     } catch {
-      // Background retry
+      // Heartbeat retry
     } finally {
       setIsProcessing(false);
     }
   }, [backendUrl, sessionId, streamActive, isProcessing, onViolation]);
 
-  // Fast frame analysis every 800ms for responsive detection
+  // Fast frame analysis every 800ms
   useEffect(() => {
     if (!streamActive) return;
     const interval = setInterval(captureAndAnalyze, 800);
@@ -111,15 +118,18 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   const fw = analysis.frame_width || 640;
   const fh = analysis.frame_height || 480;
   const isMultiple = analysis.status === 'multiple_faces' || analysis.face_count > 1;
+  const isGazeAway = !analysis.looking_at_screen && analysis.face_count === 1;
 
   return (
     <div
       style={{
-        border: isMultiple ? '2px solid #EF4444' : '1px solid var(--color-border)',
+        border: isMultiple || isGazeAway || analysis.eyewear_detected
+          ? '2px solid #EF4444'
+          : '1px solid var(--color-border)',
         borderRadius: 'var(--radius-md)',
         backgroundColor: 'var(--color-surface)',
         overflow: 'hidden',
-        boxShadow: isMultiple
+        boxShadow: isMultiple || isGazeAway
           ? '0 0 16px rgba(239, 68, 68, 0.45)'
           : '0 2px 8px rgba(0,0,0,0.06)',
         transition: 'all 0.2s ease'
@@ -128,8 +138,8 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       <div
         style={{
           padding: '8px 12px',
-          backgroundColor: isMultiple ? '#FEF2F2' : 'var(--color-surface-muted)',
-          borderBottom: isMultiple ? '1px solid #FCA5A5' : '1px solid var(--color-border)',
+          backgroundColor: isMultiple || isGazeAway ? '#FEF2F2' : 'var(--color-surface-muted)',
+          borderBottom: isMultiple || isGazeAway ? '1px solid #FCA5A5' : '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
@@ -137,17 +147,29 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', fontWeight: 600 }}>
           <Camera size={14} className="card-icon" />
-          <span>Live Proctoring AI</span>
+          <span>Where U Elevate AI Proctor</span>
         </div>
 
-        {streamActive && !isMultiple && analysis.status === 'verified' && (
+        {streamActive && !isMultiple && analysis.looking_at_screen && analysis.status === 'verified' && (
           <span className="status-badge connected" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
-            <CheckCircle size={12} /> 1 Face Verified
+            <Eye size={12} /> Eyes on Screen
           </span>
         )}
-        {streamActive && analysis.status === 'no_face' && (
-          <span className="status-badge disconnected" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
-            <AlertTriangle size={12} /> No Face Detected
+        {streamActive && isGazeAway && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#F59E0B',
+              color: '#FFFFFF',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              fontWeight: 700
+            }}
+          >
+            <EyeOff size={12} /> Gaze: {analysis.gaze_direction}
           </span>
         )}
         {streamActive && isMultiple && (
@@ -161,8 +183,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
               padding: '3px 8px',
               borderRadius: '4px',
               fontSize: '0.75rem',
-              fontWeight: 700,
-              animation: 'pulse 1s infinite'
+              fontWeight: 700
             }}
           >
             <Users size={12} /> {analysis.face_count} FACES DETECTED
@@ -170,7 +191,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         )}
       </div>
 
-      <div style={{ position: 'relative', width: '100%', height: compact ? '180px' : '230px', backgroundColor: '#111827' }}>
+      <div style={{ position: 'relative', width: '100%', height: compact ? '180px' : '230px', backgroundColor: '#0F172A' }}>
         {cameraError ? (
           <div
             style={{
@@ -198,20 +219,19 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                 width: '100%',
                 height: '100%',
                 objectFit: 'cover',
-                transform: 'scaleX(-1)' // Mirror for natural candidate view
+                transform: 'scaleX(-1)' // Mirror view
               }}
             />
 
             {/* AI Face Detection Bounding Boxes */}
             {analysis.bounding_boxes.map((box, i) => {
-              // Convert to mirrored percentages
               const leftPct = (1 - (box.x + box.width) / fw) * 100;
               const topPct = (box.y / fh) * 100;
               const widthPct = (box.width / fw) * 100;
               const heightPct = (box.height / fh) * 100;
 
               const isFirst = i === 0;
-              const boxColor = isMultiple ? '#EF4444' : '#10B981';
+              const boxColor = isMultiple ? '#EF4444' : isGazeAway ? '#F59E0B' : '#10B981';
 
               return (
                 <div
@@ -242,9 +262,33 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                       whiteSpace: 'nowrap'
                     }}
                   >
-                    {isMultiple ? (isFirst ? 'Face #1 (Candidate)' : `Face #${i + 1} (Unauthorized)`) : 'Candidate Verified'}
+                    {isMultiple ? (isFirst ? 'Face #1 (Candidate)' : `Face #${i + 1} (Unauthorized)`) : isGazeAway ? 'Candidate (Looking Away)' : 'Candidate (Eyes on Screen)'}
                   </div>
                 </div>
+              );
+            })}
+
+            {/* Real-time Eye Tracking Reticles */}
+            {analysis.eyes && analysis.eyes.map((eye, i) => {
+              const eyeLeftPct = (1 - eye.x / fw) * 100;
+              const eyeTopPct = (eye.y / fh) * 100;
+              return (
+                <div
+                  key={`eye-${i}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${eyeLeftPct}%`,
+                    top: `${eyeTopPct}%`,
+                    width: '10px',
+                    height: '10px',
+                    transform: 'translate(-50%, -50%)',
+                    borderRadius: '50%',
+                    backgroundColor: analysis.looking_at_screen ? '#10B981' : '#EF4444',
+                    border: '2px solid #FFFFFF',
+                    boxShadow: '0 0 6px #10B981',
+                    pointerEvents: 'none'
+                  }}
+                />
               );
             })}
           </>
@@ -254,24 +298,26 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
 
+      {/* Warning status alerts */}
       {isMultiple && (
-        <div
-          style={{
-            backgroundColor: '#DC2626',
-            color: '#FFFFFF',
-            padding: '6px 12px',
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            textAlign: 'center'
-          }}
-        >
-          Warning: Multiple people detected in view ({analysis.face_count} faces).
+        <div style={{ backgroundColor: '#DC2626', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+          Multiple individuals detected in view ({analysis.face_count} faces).
+        </div>
+      )}
+      {!isMultiple && isGazeAway && (
+        <div style={{ backgroundColor: '#D97706', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+          Gaze Alert: Looking away from screen ({analysis.gaze_direction}). Please face monitor.
+        </div>
+      )}
+      {analysis.eyewear_detected && (
+        <div style={{ backgroundColor: '#B91C1C', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+          Eyewear Alert: Tinted or dark glasses detected. Please remove eyewear.
         </div>
       )}
 
       <div style={{ padding: '6px 12px', fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
-        <span>MediaPipe BlazeFace + OpenCV</span>
-        <span>Faces: <strong>{analysis.face_count}</strong> ({Math.round((analysis.confidence || 0) * 100)}%)</span>
+        <span>Eye Gaze: <strong>{analysis.gaze_direction}</strong></span>
+        <span>Faces: <strong>{analysis.face_count}</strong></span>
       </div>
     </div>
   );

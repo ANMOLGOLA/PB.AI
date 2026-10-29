@@ -4,6 +4,7 @@ import { ServiceStatus } from './components/ServiceStatus';
 import { SecuritySignals } from './components/SecuritySignals';
 import { ExamOverview } from './components/ExamOverview';
 import { CandidateOnboarding } from './components/CandidateOnboarding';
+import { ExamRulesPage } from './components/ExamRulesPage';
 import { ExamWorkspace } from './components/ExamWorkspace';
 import { IntegrityAuditReport } from './components/IntegrityAuditReport';
 import { fetchHealth, fetchExams, createSession, submitSession } from './api/client';
@@ -14,7 +15,7 @@ import {
   CandidateSession,
   SubmitSessionResult
 } from './api/types';
-import { Play, Camera, Maximize } from 'lucide-react';
+import { Play, Camera, Eye, Lock, Sparkles } from 'lucide-react';
 
 const resolveInitialApiUrl = (): string => {
   if (typeof window !== 'undefined' && window.location?.origin && window.location.origin.startsWith('http')) {
@@ -26,7 +27,7 @@ const resolveInitialApiUrl = (): string => {
   return 'http://127.0.0.1:8000';
 };
 
-type AppMode = 'status' | 'onboarding' | 'exam' | 'report';
+type AppMode = 'status' | 'onboarding' | 'rules' | 'exam' | 'report';
 
 export const App: React.FC = () => {
   const [backendUrl, setBackendUrl] = useState<string>(resolveInitialApiUrl);
@@ -40,8 +41,10 @@ export const App: React.FC = () => {
   const [exams, setExams] = useState<PublicExam[]>([]);
   const [isRefreshing, setIsRefreshing] = useState<boolean>(false);
 
-  // Proctoring and Workflow State
+  // Proctoring Workflow State
   const [mode, setMode] = useState<AppMode>('status');
+  const [candidateName, setCandidateName] = useState<string>('Parv Mishra');
+  const [candidateId, setCandidateId] = useState<string>('CAND-2026-001');
   const [activeSession, setActiveSession] = useState<CandidateSession | null>(null);
   const [submissionResult, setSubmissionResult] = useState<SubmitSessionResult | null>(null);
   const [isStartingExam, setIsStartingExam] = useState<boolean>(false);
@@ -121,23 +124,29 @@ export const App: React.FC = () => {
     checkConnectivity(backendUrl);
   }, [backendUrl, checkConnectivity]);
 
-  // Start exam session & request mandatory full-screen lockdown
-  const handleStartExam = async (candidateName: string, candidateId: string) => {
+  // Stage 1: Candidate inputs details -> Moves to Rules
+  const handleProceedToRules = (name: string, id: string) => {
+    setCandidateName(name);
+    setCandidateId(id);
+    setMode('rules');
+  };
+
+  // Stage 2: Candidate agrees to all rules -> Enforces mandatory lockdown & starts session
+  const handleLaunchAssessment = async () => {
     if (exams.length === 0) return;
     setIsStartingExam(true);
     try {
       const session = await createSession(backendUrl, exams[0].id, candidateName, candidateId);
       setActiveSession(session);
 
-      // Trigger mandatory Electron fullscreen lockdown
+      // Trigger mandatory Electron fullscreen & Kiosk lockdown
       if (window.sentinelBridge) {
         await window.sentinelBridge.setFullscreen(true);
       } else if (document.documentElement.requestFullscreen) {
-        // Standard Web Fullscreen API fallback
         try {
           await document.documentElement.requestFullscreen();
         } catch {
-          // Fullscreen request optional in browser
+          // Browser fallback
         }
       }
 
@@ -149,7 +158,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Submit exam and leave fullscreen
+  // Stage 3: Submit exam and exit fullscreen
   const handleSubmitExam = async () => {
     if (!activeSession) return;
     setIsSubmittingExam(true);
@@ -157,7 +166,7 @@ export const App: React.FC = () => {
       const result = await submitSession(backendUrl, activeSession.id);
       setSubmissionResult(result);
 
-      // Exit fullscreen mode upon completion
+      // Release fullscreen & kiosk mode upon successful completion
       if (window.sentinelBridge) {
         await window.sentinelBridge.setFullscreen(false);
       } else if (document.exitFullscreen && document.fullscreenElement) {
@@ -172,7 +181,7 @@ export const App: React.FC = () => {
     }
   };
 
-  // Render Active Exam View (Full Window Workspace)
+  // Render Fullscreen Exam Workspace
   if (mode === 'exam' && exams.length > 0 && activeSession) {
     return (
       <ExamWorkspace
@@ -202,6 +211,22 @@ export const App: React.FC = () => {
     );
   }
 
+  // Render Visual Rules & Guidelines Page
+  if (mode === 'rules' && exams.length > 0) {
+    return (
+      <div className="app-container">
+        <Header platform={platform} appVersion={appVersion} />
+        <ExamRulesPage
+          exam={exams[0]}
+          candidateName={candidateName}
+          candidateId={candidateId}
+          onAcceptRules={handleLaunchAssessment}
+          onBack={() => setMode('onboarding')}
+        />
+      </div>
+    );
+  }
+
   // Render Candidate Onboarding View
   if (mode === 'onboarding' && exams.length > 0) {
     return (
@@ -210,14 +235,14 @@ export const App: React.FC = () => {
         <CandidateOnboarding
           exam={exams[0]}
           backendUrl={backendUrl}
-          onStartExam={handleStartExam}
+          onProceedToRules={handleProceedToRules}
           isLoading={isStartingExam}
         />
       </div>
     );
   }
 
-  // Default: Assessment Status & Proctoring Launch Screen
+  // Default: Where U Elevate Assessment Status & Launch Screen
   return (
     <div className="app-container">
       <Header platform={platform} appVersion={appVersion} />
@@ -225,10 +250,15 @@ export const App: React.FC = () => {
       <main>
         <section className="page-intro" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
           <div>
-            <h2 className="page-title">Secure Assessment & Proctoring System</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-accent)', letterSpacing: '0.06em' }}>
+                Where U Elevate &bull; Proctoring Suite
+              </span>
+            </div>
+            <h2 className="page-title">Next-Gen Intelligent Assessment Browser</h2>
             <p className="page-description">
-              Candidate identity verification, mandatory full-screen lockdown, live OpenCV computer-vision
-              face monitoring, and explainable integrity telemetry.
+              Candidate identity verification, mandatory full-screen Kiosk lockdown, hardware anti-overlay protection,
+              MediaPipe deep-learning eye gaze tracking, and explainable integrity telemetry.
             </p>
           </div>
 
@@ -237,50 +267,60 @@ export const App: React.FC = () => {
               type="button"
               className="btn btn-primary"
               onClick={() => setMode('onboarding')}
-              style={{ padding: '12px 20px', fontSize: '0.9375rem', fontWeight: 600, display: 'inline-flex', alignItems: 'center', gap: '8px' }}
+              style={{ padding: '14px 24px', fontSize: '1rem', fontWeight: 700, display: 'inline-flex', alignItems: 'center', gap: '10px' }}
             >
-              <Play size={16} fill="currentColor" />
-              <span>Launch Proctoring Exam</span>
+              <Play size={18} fill="currentColor" />
+              <span>Begin Examination Check-In</span>
             </button>
           )}
         </section>
 
-        {/* Feature Highlights Banner */}
+        {/* Feature Highlights Grid */}
         <div
           style={{
             display: 'grid',
-            gridTemplateColumns: 'repeat(3, 1fr)',
+            gridTemplateColumns: 'repeat(4, 1fr)',
             gap: '16px',
             marginBottom: '32px'
           }}
         >
-          <div style={{ padding: '16px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '6px' }}>
-              <Camera size={18} className="card-icon" />
-              <span>OpenCV Vision Proctoring</span>
+          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
+              <Lock size={18} />
+              <span>Kiosk Lockdown</span>
             </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-              Continuous real-time face detection, absence detection, and multiple-face alert signals.
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+              Mandatory full-screen enforcement. Moving out of the exam or Alt+Tab switching is completely prevented.
             </p>
           </div>
 
-          <div style={{ padding: '16px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '6px' }}>
-              <Maximize size={18} className="card-icon" />
-              <span>Mandatory Fullscreen Lock</span>
+          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
+              <Eye size={18} />
+              <span>Eye Gaze Tracking</span>
             </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-              Assessment window locks to full screen. Window blur and keypress attempts are logged.
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+              MediaPipe neural facial keypoints track pupil orientation to verify candidate eyes remain focused on the screen.
             </p>
           </div>
 
-          <div style={{ padding: '16px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-md)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 600, marginBottom: '6px' }}>
-              <Play size={18} className="card-icon" />
-              <span>Interactive Assessment</span>
+          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
+              <Camera size={18} />
+              <span>Multi-Face Detection</span>
             </div>
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
-              Timed 5-question technical exam with automated backend evaluation and integrity timeline.
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+              Deep BlazeFace detector continuously verifies single-candidate presence and flags secondary individuals.
+            </p>
+          </div>
+
+          <div style={{ padding: '18px', backgroundColor: 'var(--color-surface)', border: '1px solid var(--color-border)', borderRadius: 'var(--radius-lg)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, marginBottom: '6px', color: 'var(--color-accent)' }}>
+              <Sparkles size={18} />
+              <span>Anti-Overlay Guard</span>
+            </div>
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)', lineHeight: 1.4 }}>
+              Hardware Content Protection blocks OBS, Discord screen sharing, Game Bar, and third-party overlays.
             </p>
           </div>
         </div>
@@ -310,8 +350,8 @@ export const App: React.FC = () => {
       </main>
 
       <footer className="app-footer">
-        <div>Sentinel Exam — Smart Secure Proctoring Platform</div>
-        <div>OpenCV Face Detection &bull; Full-Screen Lockdown &bull; Zero Answer Leakage</div>
+        <div>Where U Elevate &bull; Sentinel Exam Proctoring System</div>
+        <div>Eye Gaze Tracking &bull; Anti-Overlay Content Protection &bull; Kiosk Fullscreen Lock</div>
       </footer>
     </div>
   );

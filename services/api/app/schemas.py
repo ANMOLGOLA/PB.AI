@@ -101,12 +101,24 @@ class BoundingBox(BaseModel):
     height: int
 
 
+class EyeCoord(BaseModel):
+    x: int
+    y: int
+    name: str
+
+
 class AnalyzeFrameResponse(BaseModel):
     face_detected: bool
     face_count: int
     confidence: float
     status: str  # "verified", "no_face", "multiple_faces"
     bounding_boxes: List[BoundingBox]
+    gaze_direction: str  # "CENTER", "LOOKING_LEFT", "LOOKING_RIGHT", "LOOKING_DOWN", "LOOKING_UP"
+    looking_at_screen: bool
+    eyes: List[EyeCoord] = []
+    eyewear_detected: bool = False
+    frame_width: Optional[int] = 640
+    frame_height: Optional[int] = 480
 
 
 class SubmitSessionResponse(BaseModel):

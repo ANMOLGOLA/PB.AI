@@ -52,6 +52,10 @@ export interface AnalyzeFrameResult {
   confidence: number;
   status: 'verified' | 'no_face' | 'multiple_faces' | string;
   bounding_boxes: BoundingBox[];
+  gaze_direction?: string;
+  looking_at_screen?: boolean;
+  eyes?: Array<{ x: number; y: number; name?: string }>;
+  eyewear_detected?: boolean;
   frame_width?: number;
   frame_height?: number;
 }

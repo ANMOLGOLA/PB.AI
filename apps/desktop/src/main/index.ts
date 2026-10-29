@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, globalShortcut } from 'electron';
 import path from 'path';
 import { setupSecurityPolicies } from './security';
 
@@ -11,8 +11,8 @@ function createWindow(): void {
     height: 840,
     minWidth: 960,
     minHeight: 640,
-    backgroundColor: '#F5F4F0',
-    title: 'Sentinel Exam — Secure Assessment Browser',
+    backgroundColor: '#0F172A',
+    title: 'Where U Elevate — Sentinel Exam Secure Assessment',
     show: true,
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
@@ -22,15 +22,25 @@ function createWindow(): void {
     }
   });
 
-  // Apply defensive process security policies
+  // Apply defensive process security and anti-overlay policies
   setupSecurityPolicies(mainWindow);
 
-  // Monitor window focus/blur for telemetry signals
+  // Monitor window focus/blur for telemetry signals and force reclaim in exam mode
   mainWindow.on('blur', () => {
     mainWindow?.webContents.send('window-focus-change', {
       focused: false,
       timestamp: Date.now()
     });
+
+    // In lockdown exam mode, immediately reclaim focus and return to top
+    if (isExamLocked && mainWindow) {
+      setTimeout(() => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.focus();
+          mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+        }
+      }, 50);
+    }
   });
 
   mainWindow.on('focus', () => {
@@ -46,24 +56,30 @@ function createWindow(): void {
 
   mainWindow.on('leave-full-screen', () => {
     mainWindow?.webContents.send('fullscreen-change', { isFullScreen: false });
-    if (isExamLocked) {
-      mainWindow?.webContents.send('security-alert', {
+    if (isExamLocked && mainWindow) {
+      // Instantly restore kiosk & fullscreen if candidate attempts to break out
+      mainWindow.setFullScreen(true);
+      mainWindow.setKiosk(true);
+      mainWindow.webContents.send('security-alert', {
         type: 'FULLSCREEN_EXIT_ATTEMPT',
-        message: 'Candidate exited mandatory fullscreen lockdown.',
+        message: 'Lockdown breach: Full-screen exit attempt was blocked and logged.',
         timestamp: Date.now()
       });
     }
   });
 
-  // Prevent bypass keystrokes in lockdown mode
+  // Intercept and prevent bypass keystrokes in lockdown mode
   mainWindow.webContents.on('before-input-event', (event, input) => {
     if (isExamLocked) {
-      // Catch escape or F11 attempting to drop fullscreen
-      if (input.key === 'F11' || input.key === 'Escape') {
+      const blockedKeys = [
+        'F11', 'F12', 'Escape', 'Alt', 'Meta', 'Tab',
+        'PrintScreen', 'ContextMenu'
+      ];
+      if (blockedKeys.includes(input.key) || (input.alt && input.key === 'Tab') || (input.control && input.shift && input.key === 'I')) {
         event.preventDefault();
         mainWindow?.webContents.send('security-alert', {
           type: 'LOCKDOWN_KEY_BLOCKED',
-          message: `Blocked restricted keypress: ${input.key}`,
+          message: `Blocked restricted key combination: ${input.key}`,
           timestamp: Date.now()
         });
       }
@@ -104,11 +120,28 @@ function createWindow(): void {
 ipcMain.handle('set-fullscreen', (_event, enable: boolean) => {
   if (mainWindow) {
     isExamLocked = enable;
-    mainWindow.setFullScreen(enable);
     if (enable) {
-      mainWindow.setAlwaysOnTop(true, 'screen-saver');
+      mainWindow.setKiosk(true);
+      mainWindow.setFullScreen(true);
+      mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+      mainWindow.setMinimizable(false);
+      mainWindow.setMovable(false);
+
+      // Register global shortcut traps
+      globalShortcut.registerAll(['Alt+Tab', 'F11', 'CommandOrControl+Shift+I'], () => {
+        mainWindow?.webContents.send('security-alert', {
+          type: 'GLOBAL_HOTKEY_BLOCKED',
+          message: 'System hotkey intercepted by exam lockdown.',
+          timestamp: Date.now()
+        });
+      });
     } else {
+      globalShortcut.unregisterAll();
+      mainWindow.setKiosk(false);
+      mainWindow.setFullScreen(false);
       mainWindow.setAlwaysOnTop(false);
+      mainWindow.setMinimizable(true);
+      mainWindow.setMovable(true);
     }
     return mainWindow.isFullScreen();
   }
@@ -137,6 +170,10 @@ app.whenReady().then(() => {
       createWindow();
     }
   });
+});
+
+app.on('will-quit', () => {
+  globalShortcut.unregisterAll();
 });
 
 app.on('window-all-closed', () => {

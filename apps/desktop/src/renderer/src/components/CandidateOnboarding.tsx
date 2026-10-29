@@ -1,19 +1,19 @@
 import React, { useState } from 'react';
-import { Shield, Maximize2, AlertCircle, ArrowRight } from 'lucide-react';
+import { Shield, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
 import { WebcamProctor } from './WebcamProctor';
 import { PublicExam } from '../api/types';
 
 interface CandidateOnboardingProps {
   exam: PublicExam;
   backendUrl: string;
-  onStartExam: (candidateName: string, candidateId: string) => void;
+  onProceedToRules: (candidateName: string, candidateId: string) => void;
   isLoading: boolean;
 }
 
 export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   exam,
   backendUrl,
-  onStartExam,
+  onProceedToRules,
   isLoading
 }) => {
   const [candidateName, setCandidateName] = useState('Parv Mishra');
@@ -22,29 +22,34 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!candidateName.trim() || !candidateId.trim()) return;
-    onStartExam(candidateName.trim(), candidateId.trim());
+    onProceedToRules(candidateName.trim(), candidateId.trim());
   };
 
   return (
-    <div style={{ maxWidth: '840px', margin: '0 auto', padding: '24px 0' }}>
-      <div className="card" style={{ padding: '32px' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '12px', marginBottom: '16px' }}>
-          <div className="brand-icon-box" style={{ width: '44px', height: '44px' }}>
-            <Shield size={24} />
+    <div style={{ maxWidth: '880px', margin: '0 auto', padding: '24px 0' }}>
+      <div className="card" style={{ padding: '36px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
+          <div className="brand-icon-box" style={{ width: '48px', height: '48px' }}>
+            <Sparkles size={24} />
           </div>
           <div>
-            <h2 style={{ fontSize: '1.375rem', fontWeight: 600 }}>Assessment Check-In & Proctoring Setup</h2>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-accent)', letterSpacing: '0.05em' }}>
+                Where U Elevate Assessment Center
+              </span>
+            </div>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Candidate Verification & Self-Check</h2>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
-              {exam.title} &bull; {exam.total_questions} MCQs &bull; {exam.duration_minutes} Minutes
+              {exam.title} &bull; {exam.total_questions} Questions &bull; {exam.duration_minutes} Minutes
             </p>
           </div>
         </div>
 
         <form onSubmit={handleSubmit}>
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', margin: '24px 0' }}>
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', margin: '24px 0' }}>
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px' }}>
-                Full Name
+                Candidate Full Name
               </label>
               <input
                 type="text"
@@ -53,17 +58,17 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                 onChange={(e) => setCandidateName(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '10px 12px',
+                  padding: '11px 14px',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--color-border)',
-                  fontSize: '0.875rem',
+                  fontSize: '0.9375rem',
                   fontFamily: 'inherit',
                   backgroundColor: 'var(--color-surface)'
                 }}
               />
 
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginTop: '16px', marginBottom: '6px' }}>
-                Candidate ID
+                Candidate Registration ID
               </label>
               <input
                 type="text"
@@ -72,23 +77,23 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                 onChange={(e) => setCandidateId(e.target.value)}
                 style={{
                   width: '100%',
-                  padding: '10px 12px',
+                  padding: '11px 14px',
                   borderRadius: 'var(--radius-md)',
                   border: '1px solid var(--color-border)',
-                  fontSize: '0.875rem',
+                  fontSize: '0.9375rem',
                   fontFamily: 'inherit',
                   backgroundColor: 'var(--color-surface)'
                 }}
               />
 
-              <div className="notice-box warning" style={{ marginTop: '20px' }}>
-                <Maximize2 size={18} style={{ flexShrink: 0, marginTop: '2px' }} />
-                <div style={{ fontSize: '0.8125rem' }}>
-                  <strong>Mandatory Lockdown Protocol:</strong>
+              <div className="notice-box info" style={{ marginTop: '20px' }}>
+                <Shield size={18} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--color-accent)' }} />
+                <div style={{ fontSize: '0.8125rem', lineHeight: 1.5 }}>
+                  <strong>Proctoring Protection Active:</strong>
                   <ul style={{ paddingLeft: '16px', marginTop: '6px' }}>
-                    <li>The assessment runs in mandatory full-screen mode.</li>
-                    <li>Tab switching, window unfocusing, and desktop shortcuts are audited.</li>
-                    <li>Webcam feeds are continuously analyzed by OpenCV computer vision.</li>
+                    <li>Where U Elevate eye tracking verifies screen focus.</li>
+                    <li>OS-level Kiosk locks window from Alt+Tab and overlays.</li>
+                    <li>Hardware Content Protection blocks screen sharing/OBS.</li>
                   </ul>
                 </div>
               </div>
@@ -96,12 +101,12 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
 
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px' }}>
-                Webcam Self-Check
+                Camera & Eye Tracking Self-Check
               </label>
               <WebcamProctor backendUrl={backendUrl} compact />
               <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
                 <AlertCircle size={14} />
-                <span>Ensure your face is well lit and centered inside the camera reticle.</span>
+                <span>Verify that your eyes are tracked with green indicators.</span>
               </div>
             </div>
           </div>
@@ -111,9 +116,9 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
               type="submit"
               className="btn btn-primary"
               disabled={isLoading}
-              style={{ padding: '12px 24px', fontSize: '1rem', fontWeight: 600 }}
+              style={{ padding: '12px 28px', fontSize: '1rem', fontWeight: 700 }}
             >
-              <span>{isLoading ? 'Entering Secure Environment...' : 'Enter Full-Screen & Begin Assessment'}</span>
+              <span>Continue to Exam Rules & Guidelines</span>
               <ArrowRight size={18} />
             </button>
           </div>

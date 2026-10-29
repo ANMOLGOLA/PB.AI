@@ -207,13 +207,50 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
                 )
                 db.add(event)
                 db.commit()
+            elif not analysis.get("looking_at_screen", True) and analysis.get("face_count") == 1:
+                event = IntegrityEvent(
+                    id=str(uuid.uuid4()),
+                    session_id=payload.session_id,
+                    event_type="GAZE_AWAY_FROM_SCREEN",
+                    occurred_at=datetime.now(timezone.utc),
+                    source="opencv_gaze_tracker",
+                    severity="medium",
+                    confidence=0.88,
+                    metadata_json=json.dumps({
+                        "gaze_direction": analysis.get("gaze_direction", "LOOKING_AWAY"),
+                        "reason": "Candidate eyes/head directed away from the assessment monitor"
+                    })
+                )
+                db.add(event)
+                db.commit()
+            elif analysis.get("eyewear_detected", False):
+                event = IntegrityEvent(
+                    id=str(uuid.uuid4()),
+                    session_id=payload.session_id,
+                    event_type="RESTRICTED_EYEWEAR_DETECTED",
+                    occurred_at=datetime.now(timezone.utc),
+                    source="opencv_vision_analyzer",
+                    severity="high",
+                    confidence=0.90,
+                    metadata_json=json.dumps({
+                        "reason": "Tinted or dark eyewear detected obscuring candidate eye gaze"
+                    })
+                )
+                db.add(event)
+                db.commit()
 
     return AnalyzeFrameResponse(
         face_detected=analysis["face_detected"],
         face_count=analysis["face_count"],
         confidence=analysis["confidence"],
         status=analysis["status"],
-        bounding_boxes=analysis["bounding_boxes"]
+        bounding_boxes=analysis["bounding_boxes"],
+        gaze_direction=analysis.get("gaze_direction", "CENTER"),
+        looking_at_screen=analysis.get("looking_at_screen", True),
+        eyes=analysis.get("eyes", []),
+        eyewear_detected=analysis.get("eyewear_detected", False),
+        frame_width=analysis.get("frame_width", 640),
+        frame_height=analysis.get("frame_height", 480)
     )
 
 
