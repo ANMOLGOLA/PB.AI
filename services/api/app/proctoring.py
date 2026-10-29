@@ -3,17 +3,28 @@ import os
 import cv2
 import numpy as np
 from typing import Dict, Any, List, Tuple
-import mediapipe as mp
 
-# MediaPipe deep-learning BlazeFace detector
-mp_face_detection = mp.solutions.face_detection
-mp_detector = mp_face_detection.FaceDetection(
-    model_selection=0,
-    min_detection_confidence=0.35
-)
+# Try to initialize MediaPipe BlazeFace detector if available; otherwise use OpenCV Haar Cascades
+mp_detector = None
+try:
+    import mediapipe as mp
+    mp_face_detection = getattr(mp, "solutions", None)
+    if mp_face_detection and hasattr(mp_face_detection, "face_detection"):
+        mp_detector = mp_face_detection.face_detection.FaceDetection(
+            model_selection=0,
+            min_detection_confidence=0.35
+        )
+except Exception:
+    mp_detector = None
+
+frontal_cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_frontalface_default.xml")
+frontal_cascade = cv2.CascadeClassifier(frontal_cascade_path) if os.path.exists(frontal_cascade_path) else None
+
+eye_cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_eye.xml")
+eye_cascade = cv2.CascadeClassifier(eye_cascade_path) if os.path.exists(eye_cascade_path) else None
 
 profile_cascade_path = os.path.join(cv2.data.haarcascades, "haarcascade_profileface.xml")
-profile_cascade = cv2.CascadeClassifier(profile_cascade_path)
+profile_cascade = cv2.CascadeClassifier(profile_cascade_path) if os.path.exists(profile_cascade_path) else None
 
 
 def estimate_gaze_direction(
@@ -101,49 +112,80 @@ def analyze_camera_frame(image_base64: str) -> Dict[str, Any]:
             }
 
         h, w, _ = frame.shape
-        rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-
-        # 1. Primary Deep-Learning Detection via MediaPipe BlazeFace
-        results = mp_detector.process(rgb_frame)
-
         bounding_boxes: List[Dict[str, int]] = []
         gaze_direction = "CENTER"
         looking_at_screen = True
         eye_points: List[Dict[str, int]] = []
 
-        if results.detections:
-            for idx, detection in enumerate(results.detections):
-                bbox_rel = detection.location_data.relative_bounding_box
-                bx = max(0, int(bbox_rel.xmin * w))
-                by = max(0, int(bbox_rel.ymin * h))
-                bw = min(w - bx, int(bbox_rel.width * w))
-                bh = min(h - by, int(bbox_rel.height * h))
-                bounding_boxes.append({
-                    "x": bx,
-                    "y": by,
-                    "width": bw,
-                    "height": bh
-                })
+        # 1. Primary Detection via MediaPipe (if available) or OpenCV Haar Cascade
+        if mp_detector is not None:
+            rgb_frame = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            results = mp_detector.process(rgb_frame)
 
-                # Extract keypoints from the primary candidate face
-                if idx == 0 and len(detection.location_data.relative_keypoints) >= 4:
-                    kps = detection.location_data.relative_keypoints
-                    r_eye = (kps[0].x, kps[0].y)
-                    l_eye = (kps[1].x, kps[1].y)
-                    nose = (kps[2].x, kps[2].y)
-                    mouth = (kps[3].x, kps[3].y)
+            if results.detections:
+                for idx, detection in enumerate(results.detections):
+                    bbox_rel = detection.location_data.relative_bounding_box
+                    bx = max(0, int(bbox_rel.xmin * w))
+                    by = max(0, int(bbox_rel.ymin * h))
+                    bw = min(w - bx, int(bbox_rel.width * w))
+                    bh = min(h - by, int(bbox_rel.height * h))
+                    bounding_boxes.append({
+                        "x": bx,
+                        "y": by,
+                        "width": bw,
+                        "height": bh
+                    })
 
-                    gaze_direction, looking_at_screen = estimate_gaze_direction(r_eye, l_eye, nose, mouth)
+                    # Extract keypoints from the primary candidate face
+                    if idx == 0 and len(detection.location_data.relative_keypoints) >= 4:
+                        kps = detection.location_data.relative_keypoints
+                        r_eye = (kps[0].x, kps[0].y)
+                        l_eye = (kps[1].x, kps[1].y)
+                        nose = (kps[2].x, kps[2].y)
+                        mouth = (kps[3].x, kps[3].y)
 
-                    eye_points = [
-                        {"x": int(r_eye[0] * w), "y": int(r_eye[1] * h), "name": "right_eye"},
-                        {"x": int(l_eye[0] * w), "y": int(l_eye[1] * h), "name": "left_eye"}
-                    ]
+                        gaze_direction, looking_at_screen = estimate_gaze_direction(r_eye, l_eye, nose, mouth)
+
+                        eye_points = [
+                            {"x": int(r_eye[0] * w), "y": int(r_eye[1] * h), "name": "right_eye"},
+                            {"x": int(l_eye[0] * w), "y": int(l_eye[1] * h), "name": "left_eye"}
+                        ]
+        else:
+            gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+            if frontal_cascade is not None:
+                faces = frontal_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=4, minSize=(30, 30))
+                for (fx, fy, fw, fh) in faces:
+                    bounding_boxes.append({
+                        "x": int(fx),
+                        "y": int(fy),
+                        "width": int(fw),
+                        "height": int(fh)
+                    })
+
+                if len(faces) > 0 and eye_cascade is not None:
+                    fx, fy, fw, fh = faces[0]
+                    face_roi_gray = gray[fy:fy+fh, fx:fx+fw]
+                    detected_eyes = eye_cascade.detectMultiScale(face_roi_gray, scaleFactor=1.1, minNeighbors=3, minSize=(12, 12))
+                    if len(detected_eyes) >= 2:
+                        sorted_eyes = sorted(detected_eyes, key=lambda e: e[0])
+                        e1, e2 = sorted_eyes[0], sorted_eyes[1]
+                        r_eye = (float(fx + e1[0] + e1[2] / 2) / w, float(fy + e1[1] + e1[3] / 2) / h)
+                        l_eye = (float(fx + e2[0] + e2[2] / 2) / w, float(fy + e2[1] + e2[3] / 2) / h)
+                        nose = (float(fx + fw / 2) / w, float(fy + fh * 0.55) / h)
+                        mouth = (float(fx + fw / 2) / w, float(fy + fh * 0.8) / h)
+                        gaze_direction, looking_at_screen = estimate_gaze_direction(r_eye, l_eye, nose, mouth)
+                        eye_points = [
+                            {"x": int(r_eye[0] * w), "y": int(r_eye[1] * h), "name": "right_eye"},
+                            {"x": int(l_eye[0] * w), "y": int(l_eye[1] * h), "name": "left_eye"}
+                        ]
+                    else:
+                        gaze_direction = "CENTER"
+                        looking_at_screen = True
 
         face_count = len(bounding_boxes)
 
         # 2. Check for side/profile face if only 1 face found by frontal detector
-        if face_count == 1:
+        if face_count == 1 and profile_cascade is not None:
             gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
             profiles = profile_cascade.detectMultiScale(
                 gray,

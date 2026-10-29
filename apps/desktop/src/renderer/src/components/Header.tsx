@@ -1,51 +1,71 @@
 import React from 'react';
-import { Layers } from 'lucide-react';
 
 interface HeaderProps {
-  platform?: string;
-  appVersion?: string;
+  currentStep?: number;
+  onStepClick?: (step: number) => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ platform, appVersion }) => {
+const STEP_LABELS = ['Sign in', 'Face ID', 'System', 'Rules', 'Test', 'Done'];
+
+export const Header: React.FC<HeaderProps> = ({ currentStep = 0, onStepClick }) => {
+  const toggleTheme = () => {
+    const root = document.documentElement;
+    const currentTheme = root.getAttribute('data-theme');
+    const isDark = currentTheme === 'dark' || (!currentTheme && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    root.setAttribute('data-theme', isDark ? 'light' : 'dark');
+  };
+
   return (
-    <header className="app-header">
-      <div className="brand-section">
-        {/* Where U Elevate Staircase / Step Crest Icon */}
-        <div className="brand-icon-box" aria-hidden="true">
-          <Layers size={22} strokeWidth={2.4} />
-        </div>
+    <header>
+      <div className="logo">
+        <svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true">
+          <path d="M4 22a13 13 0 0 1 26 0" fill="none" stroke="#0a58b8" strokeWidth="3" strokeLinecap="round" />
+          <rect x="11" y="20" width="12" height="4" rx="1" fill="#0e7bf0" />
+          <rect x="13" y="15" width="10" height="4" rx="1" fill="#0a58b8" />
+          <rect x="16" y="10" width="8" height="4" rx="1" fill="#0e7bf0" />
+        </svg>
         <div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <h1 className="brand-title">Where U Elevate</h1>
-            <span
-              style={{
-                fontSize: '0.6875rem',
-                fontWeight: 700,
-                letterSpacing: '0.06em',
-                textTransform: 'uppercase',
-                backgroundColor: 'var(--color-accent-subtle)',
-                color: 'var(--color-accent)',
-                padding: '2px 6px',
-                borderRadius: '4px'
-              }}
-            >
-              SENTINEL EXAM
-            </span>
-          </div>
-          <p className="brand-tagline">
-            Accelerating Innovation. Elevating Assessments.
-          </p>
+          Where U Elevate
+          <small>Assess · Smart Proctor</small>
         </div>
       </div>
 
-      <div className="header-meta">
-        <span className="environment-tag">
-          {platform ? `Client (${platform})` : 'Desktop Client'}
-        </span>
-        <span className="environment-tag">
-          v{appVersion || '0.1.0'}
-        </span>
+      <nav className="mnav">
+        <a href="https://whereuelevate.com/drills" target="_blank" rel="noopener noreferrer">Hackathons</a>
+        <a href="https://whereuelevate.com/jobs" target="_blank" rel="noopener noreferrer">Jobs</a>
+        <a href="https://whereuelevate.com/internships" target="_blank" rel="noopener noreferrer">Internships</a>
+        <a href="https://whereuelevate.com/events" target="_blank" rel="noopener noreferrer">Events &amp; Bootcamps</a>
+      </nav>
+
+      <div className="sp"></div>
+
+      <div className="steps" id="steps">
+        {STEP_LABELS.map((label, idx) => {
+          let dotClass = 'dot';
+          if (idx < currentStep) dotClass += ' done';
+          else if (idx === currentStep) dotClass += ' on';
+
+          return (
+            <div
+              key={label}
+              className={dotClass}
+              title={label}
+              style={{ cursor: idx < currentStep && onStepClick ? 'pointer' : 'default' }}
+              onClick={() => {
+                if (idx < currentStep && onStepClick) {
+                  onStepClick(idx);
+                }
+              }}
+            >
+              {idx + 1}
+            </div>
+          );
+        })}
       </div>
+
+      <button className="btn ghost sm" onClick={toggleTheme} aria-label="Toggle theme">
+        ◐ Theme
+      </button>
     </header>
   );
 };
