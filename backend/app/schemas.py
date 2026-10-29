@@ -72,6 +72,26 @@ class AnswerResponse(BaseModel):
     selected_choice_id: str
 
 
+class BatchAutosaveRequest(BaseModel):
+    answers: Dict[str, str]  # question_id -> selected_choice_id
+
+
+class BatchAutosaveResponse(BaseModel):
+    status: str
+    saved_count: int
+    session_id: str
+
+
+class ServerTimerResponse(BaseModel):
+    session_id: str
+    started_at: datetime
+    duration_minutes: int
+    total_seconds: int
+    elapsed_seconds: int
+    time_remaining_seconds: int
+    is_expired: bool
+
+
 class LogEventRequest(BaseModel):
     event_type: str
     source: str
@@ -89,13 +109,12 @@ class EventResponse(BaseModel):
     severity: str
     confidence: float
     metadata: Dict[str, Any]
+    review_status: str = "unreviewed"
+    review_notes: Optional[str] = None
+    reviewed_by: Optional[str] = None
+    reviewed_at: Optional[datetime] = None
 
     model_config = ConfigDict(from_attributes=True)
-
-
-class AnalyzeFrameRequest(BaseModel):
-    image_base64: str
-    session_id: Optional[str] = None
 
 
 class BoundingBox(BaseModel):
@@ -109,6 +128,11 @@ class EyeCoord(BaseModel):
     x: int
     y: int
     name: str
+
+
+class AnalyzeFrameRequest(BaseModel):
+    image_base64: str
+    session_id: Optional[str] = None
 
 
 class AnalyzeFrameResponse(BaseModel):
@@ -129,6 +153,7 @@ class AnalyzeFrameResponse(BaseModel):
     frame_height: Optional[int] = 480
     latency_ms: Optional[float] = 10.0
     engine: Optional[str] = "local_mediapipe_realtime"
+    details: Dict[str, Any] = {}
 
 
 # --- Pre-Exam Biometric Scan Schemas ---
@@ -180,6 +205,8 @@ class SubmitSessionResponse(BaseModel):
     events_summary: Dict[str, int]
     events: List[EventResponse]
 
+    model_config = ConfigDict(from_attributes=True)
+
 
 # --- Layer C: Optional Secondary Forensic Review Schemas ---
 
@@ -198,3 +225,89 @@ class IncidentReviewResponse(BaseModel):
     latency_ms: float = 0.0
     error_message: Optional[str] = None
     unverified_by_examiner: bool = True
+
+
+# --- Dedicated Proctor Dashboard Schemas ---
+
+class ReviewEventDecisionRequest(BaseModel):
+    status: str  # "reviewed", "dismissed", "escalated"
+    reason: Optional[str] = None
+    proctor_id: Optional[str] = "PROCTOR-ADMIN-01"
+
+
+class TerminateSessionRequest(BaseModel):
+    reason: str = "Terminated by proctor for integrity violation"
+    proctor_id: Optional[str] = "PROCTOR-ADMIN-01"
+
+
+class StartSessionResponse(BaseModel):
+    status: str
+    session_id: str
+    screen_sharing_active: bool
+    started_at: datetime
+    message: str
+
+
+class SessionReadinessResponse(BaseModel):
+    session_id: str
+    screen_sharing_active: bool
+    face_enrolled: bool
+    is_ready: bool
+    candidate_name: str
+
+
+class CreateQuestionChoiceInput(BaseModel):
+    choice_letter: str
+    text: str
+    is_correct: bool = False
+
+
+class CreateQuestionInput(BaseModel):
+    question_number: int
+    text: str
+    choices: List[CreateQuestionChoiceInput]
+
+
+class CreateAssessmentRequest(BaseModel):
+    title: str
+    description: str
+    duration_minutes: int = 30
+    questions: Optional[List[CreateQuestionInput]] = None
+
+
+# --- OTP Authentication Schemas ---
+
+class SendOTPRequest(BaseModel):
+    identifier: str  # email or phone number
+
+
+class SendOTPResponse(BaseModel):
+    status: str
+    identifier: str
+    expires_in_seconds: int
+    dev_otp: Optional[str] = None
+    message: str
+
+
+class VerifyOTPRequest(BaseModel):
+    identifier: str
+    otp_code: str
+
+
+class VerifyOTPResponse(BaseModel):
+    status: str
+    verified: bool
+    token: str
+    candidate_id: str
+    identifier: str
+    message: str
+
+
+# --- Airtable Integration Schemas ---
+
+class AirtableSyncResponse(BaseModel):
+    status: str
+    source: str
+    exam_id: str
+    questions_synced: int
+    message: str

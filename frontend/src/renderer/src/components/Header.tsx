@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { Layers, LogOut } from 'lucide-react';
 
 interface HeaderProps {
   currentStep?: number;
@@ -8,18 +9,17 @@ interface HeaderProps {
   onNavigateHome?: () => void;
   isLanding?: boolean;
   firstName?: string;
+  platform?: string;
+  appVersion?: string;
 }
 
-const STEP_LABELS = ['Sign in', 'Face ID', 'System', 'Rules', 'Test', 'Done'];
-
 export const Header: React.FC<HeaderProps> = ({
-  currentStep = 0,
-  onStepClick,
-  showSteps = false,
   onNavigateToTest,
   onNavigateHome,
   isLanding = false,
-  firstName = 'Anmol'
+  firstName = 'Candidate',
+  platform,
+  appVersion
 }) => {
   const [showProfileMenu, setShowProfileMenu] = useState<boolean>(false);
   const [showSettingsModal, setShowSettingsModal] = useState<boolean>(false);
@@ -33,7 +33,7 @@ export const Header: React.FC<HeaderProps> = ({
       const stored = localStorage.getItem('theme');
       if (stored === 'dark' || stored === 'light') return stored;
     }
-    return 'light'; // Default is strictly light theme with subtle colours
+    return 'light';
   });
 
   useEffect(() => {
@@ -60,6 +60,16 @@ export const Header: React.FC<HeaderProps> = ({
     document.documentElement.setAttribute('data-theme', selectedTheme);
     if (typeof window !== 'undefined') {
       localStorage.setItem('theme', selectedTheme);
+    }
+  };
+
+  const handleQuit = () => {
+    if (window.confirm('Are you sure you want to exit the application?')) {
+      if (window.sentinelBridge && window.sentinelBridge.closeApp) {
+        window.sentinelBridge.closeApp();
+      } else {
+        window.close();
+      }
     }
   };
 
@@ -108,130 +118,73 @@ export const Header: React.FC<HeaderProps> = ({
           <a href="https://whereuelevate.com/drills" target="_blank" rel="noopener noreferrer">Hackathons</a>
           <a href="https://whereuelevate.com/jobs" target="_blank" rel="noopener noreferrer">Jobs</a>
           <a href="https://whereuelevate.com/internships" target="_blank" rel="noopener noreferrer">Internships</a>
-          <a href="https://whereuelevate.com/events" target="_blank" rel="noopener noreferrer">Events &amp; Bootcamps</a>
+          <a href="https://whereuelevate.com/events" target="_blank" rel="noopener noreferrer">Events</a>
+          <a href="https://whereuelevate.com/solutions-for-enterprises" target="_blank" rel="noopener noreferrer">For Enterprises</a>
         </nav>
 
-        <div className="sp"></div>
+        {/* User Profile Avatar with Interactive Dropdown */}
+        <div className="uwrap" ref={profileRef} style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+          {/* Emergency Quit for Desktop */}
+          {typeof window !== 'undefined' && window.sentinelBridge && (
+            <button
+              type="button"
+              onClick={handleQuit}
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '4px',
+                padding: '5px 10px',
+                fontSize: '0.75rem',
+                fontWeight: 700,
+                backgroundColor: 'rgba(239, 68, 68, 0.1)',
+                color: '#EF4444',
+                border: '1px solid rgba(239, 68, 68, 0.3)',
+                borderRadius: '6px',
+                cursor: 'pointer'
+              }}
+              title="Quit Application"
+            >
+              <LogOut size={12} />
+              <span>Quit</span>
+            </button>
+          )}
 
-        {/* Assessment Steps if in exam */}
-        {showSteps && (
-          <div className="steps" id="steps">
-            {STEP_LABELS.map((label, idx) => {
-              let dotClass = 'dot';
-              if (idx < currentStep) dotClass += ' done';
-              else if (idx === currentStep) dotClass += ' on';
-
-              return (
-                <div
-                  key={label}
-                  className={dotClass}
-                  title={label}
-                  style={{ cursor: idx < currentStep && onStepClick ? 'pointer' : 'default' }}
-                  onClick={() => {
-                    if (idx < currentStep && onStepClick) {
-                      onStepClick(idx);
-                    }
-                  }}
-                >
-                  {idx + 1}
-                </div>
-              );
-            })}
-          </div>
-        )}
-
-        {/* Right Action: For Organization Button (Golden Amber Pill) */}
-        <a
-          href="https://whereuelevate.com/organization"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="btn-for-organization"
-          title="For Organizations and Employers"
-        >
-          For Organization
-        </a>
-
-        {/* Upper Right Corner: User Profile Pill (Avatar on Left + Hi Yashashvi... + Caret) */}
-        <div className="header-profile-wrapper" ref={profileRef}>
           <div
-            className={`header-user-profile ${showProfileMenu ? 'active' : ''}`}
+            className="uavatar-btn"
             onClick={() => setShowProfileMenu((prev) => !prev)}
-            title="Candidate Account Menu"
+            title="User Profile Menu"
           >
-            <div className="header-user-avatar">
-              <svg
-                width="16"
-                height="16"
-                viewBox="0 0 24 24"
-                fill="currentColor"
-              >
-                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z" />
-              </svg>
-            </div>
-            <span className="header-user-name">Hi {firstName}...</span>
+            <div className="uavatar">{firstName.charAt(0).toUpperCase()}</div>
+            <span className="uavatar-name">{firstName}</span>
             <svg
-              width="12"
-              height="12"
+              className={`uavatar-chevron ${showProfileMenu ? 'open' : ''}`}
+              width="14"
+              height="14"
               viewBox="0 0 24 24"
               fill="none"
               stroke="currentColor"
-              strokeWidth="2.5"
-              className={`profile-caret ${showProfileMenu ? 'rotate' : ''}`}
+              strokeWidth="2.2"
             >
-              <path d="m6 9 6 6 6-6" />
+              <path d="M6 9l6 6 6-6" />
             </svg>
           </div>
 
-          {/* Profile Dropdown Menu */}
+          {/* Frosted Dropdown Menu */}
           {showProfileMenu && (
-            <div className="profile-dropdown-menu">
-              {/* User Identity Header */}
-              <div className="dropdown-user-header">
-                <div className="dropdown-user-avatar">
-                  <span>A</span>
-                </div>
-                <div className="dropdown-user-details">
-                  <div className="dropdown-user-fullname">{firstName} Sharma</div>
-                  <div className="dropdown-user-email">anmol@whereuelevate.com</div>
+            <div className="uprofile-dropdown">
+              <div className="uprofile-header">
+                <div className="uprofile-avatar-large">{firstName.charAt(0).toUpperCase()}</div>
+                <div>
+                  <div className="uprofile-fullname">{firstName} Candidate</div>
+                  <div className="uprofile-email">candidate@whereuelevate.com</div>
                 </div>
               </div>
 
-              {/* 1. Profile Strength (Percentage) */}
-              <div className="profile-strength-card">
-                <div className="profile-strength-top">
-                  <span className="profile-strength-label">Profile Strength</span>
-                  <span className="profile-strength-pct">85%</span>
-                </div>
-                <div className="profile-strength-bar">
-                  <div className="profile-strength-fill" style={{ width: '85%' }} />
-                </div>
-                <div className="profile-strength-tip">Almost there! Complete your bio &amp; skills</div>
-              </div>
+              <div className="uprofile-divider" />
 
-              <div className="dropdown-divider" />
-
-              {/* Dropdown Navigation Actions */}
-              <div className="dropdown-menu-list">
-                {/* 2. My Dashboard */}
+              <div className="uprofile-section">
                 <button
-                  className="dropdown-menu-item"
-                  onClick={() => {
-                    setShowProfileMenu(false);
-                    if (onNavigateToTest) onNavigateToTest();
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <rect x="3" y="3" width="7" height="9" rx="1" />
-                    <rect x="14" y="3" width="7" height="5" rx="1" />
-                    <rect x="14" y="12" width="7" height="9" rx="1" />
-                    <rect x="3" y="16" width="7" height="5" rx="1" />
-                  </svg>
-                  <span>My Dashboard</span>
-                </button>
-
-                {/* 3. My Profile */}
-                <button
-                  className="dropdown-menu-item"
+                  className="uprofile-item"
                   onClick={() => {
                     setShowProfileMenu(false);
                     setShowProfileModal(true);
@@ -244,23 +197,23 @@ export const Header: React.FC<HeaderProps> = ({
                   <span>My Profile</span>
                 </button>
 
-                {/* 4. My Activities */}
                 <button
-                  className="dropdown-menu-item"
+                  className="uprofile-item"
                   onClick={() => {
                     setShowProfileMenu(false);
                     setShowActivitiesModal(true);
                   }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    <rect x="2" y="7" width="20" height="14" rx="2" ry="2" />
+                    <path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16" />
                   </svg>
                   <span>My Activities</span>
+                  <span className="uprofile-badge">2 Active</span>
                 </button>
 
-                {/* 5. Settings */}
                 <button
-                  className="dropdown-menu-item"
+                  className="uprofile-item"
                   onClick={() => {
                     setShowProfileMenu(false);
                     setShowSettingsModal(true);
@@ -274,102 +227,104 @@ export const Header: React.FC<HeaderProps> = ({
                 </button>
               </div>
 
-              <div className="dropdown-divider" />
+              <div className="uprofile-divider" />
 
-              {/* 6. Logout (in red) */}
-              <div className="dropdown-logout-wrap">
-                <button
-                  className="dropdown-menu-item logout-red"
-                  onClick={() => {
-                    setShowProfileMenu(false);
-                    alert('You have logged out of your Where U Elevate / ExamZone account.');
-                    if (onNavigateHome) onNavigateHome();
-                  }}
+              {/* Theme Selector Toggle */}
+              <div className="uprofile-theme-row">
+                <span className="uprofile-theme-label">Theme</span>
+                <div className="uprofile-theme-toggle">
+                  <button
+                    className={`theme-pill-btn ${theme === 'light' ? 'active' : ''}`}
+                    onClick={() => selectTheme('light')}
+                  >
+                    Light
+                  </button>
+                  <button
+                    className={`theme-pill-btn ${theme === 'dark' ? 'active' : ''}`}
+                    onClick={() => selectTheme('dark')}
+                  >
+                    Dark
+                  </button>
+                </div>
+              </div>
+
+              <div className="uprofile-divider" />
+
+              <div className="uprofile-section">
+                <a
+                  href="https://whereuelevate.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="uprofile-item"
+                  style={{ textDecoration: 'none' }}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                    <polyline points="16 17 21 12 16 7" />
-                    <line x1="21" y1="12" x2="9" y2="12" />
+                    <circle cx="12" cy="12" r="10" />
+                    <line x1="12" y1="16" x2="12" y2="12" />
+                    <line x1="12" y1="8" x2="12.01" y2="8" />
                   </svg>
-                  <span>Logout</span>
-                </button>
+                  <span>Help Center & FAQ</span>
+                </a>
               </div>
             </div>
           )}
         </div>
       </header>
 
-      {/* Settings & Preferences Modal (with Theme Selector) */}
+      {/* Settings Modal */}
       {showSettingsModal && (
         <div className="settings-modal-backdrop" onClick={() => setShowSettingsModal(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="settings-modal-header">
-              <h3 className="settings-modal-title">Settings &amp; Preferences</h3>
+              <h3 className="settings-modal-title">Settings & Preferences</h3>
               <button
                 className="settings-modal-close"
                 onClick={() => setShowSettingsModal(false)}
-                aria-label="Close settings"
               >
                 ✕
               </button>
             </div>
-
             <div className="settings-modal-body">
-              {/* Theme Settings Section */}
-              <div>
-                <span className="settings-group-label">Theme Appearance</span>
-                <div className="theme-options-grid">
-                  {/* Light Theme Card */}
-                  <div
-                    className={`theme-option-card ${theme === 'light' ? 'selected' : ''}`}
+              <div className="settings-field">
+                <label className="settings-label">Color Theme</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className={`btn sm ${theme === 'light' ? 'primary' : 'secondary'}`}
                     onClick={() => selectTheme('light')}
                   >
-                    <div className="theme-option-icon">☀️</div>
-                    <div className="theme-option-name">Light Theme</div>
-                    <span className="theme-option-tag">Default</span>
-                  </div>
-
-                  {/* Dark Theme Card */}
-                  <div
-                    className={`theme-option-card ${theme === 'dark' ? 'selected' : ''}`}
+                    Light Mode (Default)
+                  </button>
+                  <button
+                    className={`btn sm ${theme === 'dark' ? 'primary' : 'secondary'}`}
                     onClick={() => selectTheme('dark')}
                   >
-                    <div className="theme-option-icon">🌙</div>
-                    <div className="theme-option-name">Dark Theme</div>
-                  </div>
+                    Dark Slate Mode
+                  </button>
                 </div>
               </div>
-
-              {/* Candidate Info Section */}
-              <div>
-                <span className="settings-group-label">Account Preferences</span>
-                <div className="settings-user-info">
-                  <div><strong>Name:</strong> {firstName} Sharma</div>
-                  <div><strong>Candidate ID:</strong> STU-2026-8841</div>
-                  <div><strong>Assessment Platform:</strong> Where U Elevate · ExamZone</div>
-                  <div><strong>Theme Status:</strong> {theme === 'light' ? 'Subtle Light Theme' : 'High-Contrast Dark Theme'}</div>
-                </div>
+              <div className="settings-field" style={{ marginTop: '16px' }}>
+                <label className="settings-label">Audio Notifications</label>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px' }}>
+                  <input type="checkbox" defaultChecked />
+                  <span>Play gentle chime on proctor notifications</span>
+                </label>
               </div>
             </div>
-
             <div className="settings-modal-footer">
-              <button
-                className="btn primary sm"
-                onClick={() => setShowSettingsModal(false)}
-              >
-                Done
+              <button className="btn primary sm" onClick={() => setShowSettingsModal(false)}>
+                Save Changes
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* My Profile Modal */}
+      {/* Profile Modal */}
       {showProfileModal && (
         <div className="settings-modal-backdrop" onClick={() => setShowProfileModal(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
             <div className="settings-modal-header">
-              <h3 className="settings-modal-title">My Profile</h3>
+              <h3 className="settings-modal-title">Candidate Profile</h3>
               <button
                 className="settings-modal-close"
                 onClick={() => setShowProfileModal(false)}
@@ -378,20 +333,17 @@ export const Header: React.FC<HeaderProps> = ({
               </button>
             </div>
             <div className="settings-modal-body">
-              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '8px' }}>
-                <div className="dropdown-user-avatar" style={{ width: '48px', height: '48px', fontSize: '18px' }}>
-                  <span>A</span>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '16px' }}>
+                <div className="uavatar" style={{ width: '48px', height: '48px', fontSize: '18px' }}>
+                  {firstName.charAt(0).toUpperCase()}
                 </div>
                 <div>
-                  <h4 style={{ margin: 0, fontSize: '16px', fontWeight: 700 }}>{firstName} Sharma</h4>
-                  <span style={{ fontSize: '12px', color: 'var(--mute)' }}>Computer Science &amp; Engineering</span>
+                  <div style={{ fontWeight: 700, fontSize: '15px' }}>{firstName} Candidate</div>
+                  <div style={{ fontSize: '12px', color: 'var(--mute)' }}>Candidate ID: CAND-2026-WUE</div>
                 </div>
               </div>
-              <div className="settings-user-info">
-                <div><strong>Email:</strong> anmol@whereuelevate.com</div>
-                <div><strong>Student ID:</strong> STU-2026-8841</div>
-                <div><strong>Cohort:</strong> 2026 Engineering Fellowship</div>
-                <div><strong>Profile Strength:</strong> 85% Complete</div>
+              <div style={{ fontSize: '12px', color: 'var(--mute)', lineHeight: 1.6 }}>
+                Identity enrolled for Where U Elevate assessment cycles. Protected by biometric anti-impersonation and continuous integrity verification.
               </div>
             </div>
             <div className="settings-modal-footer">
@@ -403,7 +355,7 @@ export const Header: React.FC<HeaderProps> = ({
         </div>
       )}
 
-      {/* My Activities Modal */}
+      {/* Activities Modal */}
       {showActivitiesModal && (
         <div className="settings-modal-backdrop" onClick={() => setShowActivitiesModal(false)}>
           <div className="settings-modal-box" onClick={(e) => e.stopPropagation()}>
@@ -419,8 +371,8 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="settings-modal-body">
               <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
                 <div style={{ padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '8px' }}>
-                  <div style={{ fontSize: '13px', fontWeight: 600 }}>hackFront India 2026</div>
-                  <div style={{ fontSize: '11px', color: 'var(--mute)' }}>Screening Round Scheduled · Today</div>
+                  <div style={{ fontSize: '13px', fontWeight: 600 }}>Where U Elevate Technical Assessment</div>
+                  <div style={{ fontSize: '11px', color: 'var(--mute)' }}>Active Screening Session · In Progress</div>
                 </div>
                 <div style={{ padding: '10px 12px', background: 'var(--bg)', border: '1px solid var(--line)', borderRadius: '8px' }}>
                   <div style={{ fontSize: '13px', fontWeight: 600 }}>Full Stack Engineering Assessment</div>

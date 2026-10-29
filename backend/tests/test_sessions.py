@@ -119,3 +119,110 @@ def test_pre_exam_scan_and_teacher_unlock(client: TestClient, db_session: Sessio
     })
     assert config_resp.status_code == 200
     assert config_resp.json()["configured"] is True
+
+
+def test_mandatory_screen_share_and_readiness(client: TestClient, db_session: Session):
+    """Test mandatory screen share gating before candidate can enter assessment."""
+    from app.routes.webrtc import signaling_manager
+
+    # 1. Create a session
+    resp = client.post("/api/sessions", json={
+        "exam_id": DEMO_EXAM_ID,
+        "candidate_name": "Bob Stone",
+        "candidate_id": "CAND-BOB-99",
+        "face_id": "FID-TEST-BOB"
+    })
+    assert resp.status_code == 201
+    session_id = resp.json()["id"]
+
+    # 2. Check readiness before screen sharing -> should NOT be ready
+    readiness_resp = client.get(f"/api/sessions/{session_id}/readiness")
+    assert readiness_resp.status_code == 200
+    assert readiness_resp.json()["screen_sharing_active"] is False
+    assert readiness_resp.json()["is_ready"] is False
+
+    # 3. Attempting to start assessment without active screen sharing must be rejected (400)
+    start_fail = client.post(f"/api/sessions/{session_id}/start")
+    assert start_fail.status_code == 400
+    assert "Screen sharing is required" in start_fail.json()["detail"]
+
+    # 4. Candidate connects screen share to signaling room
+    room = signaling_manager.get_or_create_room(session_id)
+    room.is_sharing = True
+
+    # 5. Check readiness now -> ready
+    readiness_ok = client.get(f"/api/sessions/{session_id}/readiness")
+    assert readiness_ok.status_code == 200
+    assert readiness_ok.json()["screen_sharing_active"] is True
+    assert readiness_ok.json()["is_ready"] is True
+
+    # 6. Start assessment endpoint succeeds
+    start_ok = client.post(f"/api/sessions/{session_id}/start")
+    assert start_ok.status_code == 200
+    assert start_ok.json()["status"] == "started"
+    assert start_ok.json()["screen_sharing_active"] is True
+
+    # Clean up room
+    room.is_sharing = False
+
+
+def test_student_portal_lockdown_and_recovery(client: TestClient, db_session: Session):
+    """Test duplicate session prevention, answer restoration, input validation, and idempotent submission."""
+    # 1. Create initial session
+    resp1 = client.post("/api/sessions", json={
+        "exam_id": DEMO_EXAM_ID,
+        "candidate_name": "Marcus Aurelius",
+        "candidate_id": "CAND-MARCUS-001"
+    })
+    assert resp1.status_code == 201
+    session_id = resp1.json()["id"]
+
+    # 2. Re-attempt to create session with same candidate & exam (e.g. page refresh) -> reuses existing session
+    resp2 = client.post("/api/sessions", json={
+        "exam_id": DEMO_EXAM_ID,
+        "candidate_name": "Marcus Aurelius",
+        "candidate_id": "CAND-MARCUS-001"
+    })
+    assert resp2.status_code == 201
+    assert resp2.json()["id"] == session_id  # Same session returned!
+
+    # 3. Save valid answer
+    exams = client.get("/api/exams").json()
+    q1 = exams[0]["questions"][0]
+    valid_choice_id = q1["choices"][0]["id"]
+
+    ans_save = client.put(f"/api/sessions/{session_id}/answers/{q1['id']}", json={
+        "selected_choice_id": valid_choice_id
+    })
+    assert ans_save.status_code == 200
+
+    # 4. Attempt to save answer for invalid question ID -> 400
+    bad_q = client.put(f"/api/sessions/{session_id}/answers/non-existent-question", json={
+        "selected_choice_id": valid_choice_id
+    })
+    assert bad_q.status_code == 400
+
+    # 5. Fetch answers via recovery endpoint -> returns saved answer
+    ans_fetch = client.get(f"/api/sessions/{session_id}/answers")
+    assert ans_fetch.status_code == 200
+    assert ans_fetch.json()["answers"][q1["id"]] == valid_choice_id
+
+    # 6. Submit session
+    sub1 = client.post(f"/api/sessions/{session_id}/submit")
+    assert sub1.status_code == 200
+    assert sub1.json()["status"] == "submitted"
+
+    # 7. Resubmit idempotency: calling submit again on submitted session returns cleanly
+    sub2 = client.post(f"/api/sessions/{session_id}/submit")
+    assert sub2.status_code == 200
+    assert sub2.json()["status"] == "submitted"
+    assert sub2.json()["score"] == sub1.json()["score"]
+
+    # 8. Attempting to start a new session after submission is rejected
+    re_post = client.post("/api/sessions", json={
+        "exam_id": DEMO_EXAM_ID,
+        "candidate_name": "Marcus Aurelius",
+        "candidate_id": "CAND-MARCUS-001"
+    })
+    assert re_post.status_code == 400
+    assert "already been submitted" in re_post.json()["detail"]

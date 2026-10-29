@@ -1,273 +1,235 @@
-# Sentinel Exam (PB.AI)
+# Sentinel Exam &times; Where U Elevate
 
-> **Secure assessments. Explainable integrity. Fair evaluation.**
-
-### Team Collaboration Guidelines
-1. Everyone shall make their own branches (`git checkout -b <branch-name>`).
-2. No one will push to `main` without consultation and PR review.
-3. Keep the code neat, readable, and typed.
-4. Pull first and then push (`git pull origin <branch>` before pushing).
+> **Smart Proctoring Browser for Technical & MCQ Assessments**  
+> Built for the WUElev8 Hackathon.
 
 ---
 
-## 1. Project Overview & Milestone Scope
+## 1. Design Philosophy: Observe & Explain, Not Block
 
-This repository contains the **Foundation Milestone** for Sentinel Exam. The objective is an installable, runnable, and verifiable desktop application and backend architecture that future proctoring and assessment features can build upon without structural refactoring.
+Sentinel Exam adheres to a modern, human-centric assessment philosophy:
 
-### Included in this Foundation Milestone:
-- **Electron Desktop Shell**: Chromium sandboxed process with context isolation, strict CSP, and window focus telemetry.
-- **Renderer UI**: React 18 + TypeScript + Vite with an editorial, warm-neutral design system adhering to WCAG AA accessibility standards.
-- **FastAPI Assessment Service**: Python backend with SQLAlchemy ORM, Pydantic validation, and SQLite storage.
-- **Deterministic Seeding**: Idempotent database initialization and seeding of a 5-question technical assessment.
-- **Zero Answer Leakage**: Database models preserve correct answer keys internally while public API schemas rigorously omit them.
-- **Endpoints**: `GET /health` and `GET /api/exams`.
-- **Automated Test Suite**: Unit, integration, idempotency, and recursive answer leakage tests.
+* **Observe, Don't Block**: Tab switching is permitted but tracked. Candidates are never locked out by rigid OS kiosks or artificial shortcut blocking.
+* **Explainable Telemetry**: Every flagged event provides context (timestamps, matched keywords, confidence ratings, and category breakdowns) rather than a black-box cheating score.
+* **Non-Blocking Warnings**: Proctors can dispatch non-intrusive warnings directly to candidate viewports.
+* **Zero Answer Leakage**: Answer keys and grading algorithms remain strictly server-side.
+* **Privacy By Design**: Passwords, OTPs, and personal communications are never intercepted or logged. Query capture is strictly limited to the managed research sandbox.
 
 ---
 
-## 2. Architecture & Monorepo Structure
+## 2. System Architecture & Monorepo Structure
 
 ```
 vistarx/
-├── apps/
-│   └── desktop/                   # Electron + React + TypeScript Desktop Shell
-│       ├── src/
-│       │   ├── main/              # Electron Main Process (Lifecycle, Security, IPC)
-│       │   │   ├── index.ts
-│       │   │   └── security.ts
-│       │   ├── preload/           # Sandboxed Preload Script (ContextBridge)
-│       │   │   └── index.ts
-│       │   └── renderer/          # Sandboxed React Application
-│       │       ├── src/
-│       │       │   ├── api/       # Typed HTTP API Client
-│       │       │   ├── components/# Editorial UI Components
-│       │       │   ├── styles/    # Design Tokens & Warm-Neutral CSS
-│       │       │   ├── App.tsx
-│       │       │   └── main.tsx
-│       │       ├── index.html     # Restrictive CSP Configuration
-│       │       └── vite.config.ts
-│       ├── package.json
-│       ├── tsconfig.json          # Renderer TS config
-│       ├── tsconfig.main.json     # Electron Main TS config
-│       └── tsconfig.preload.json  # Electron Preload TS config
-├── services/
-│   └── api/                       # FastAPI Assessment Backend
-│       ├── app/
-│       │   ├── config.py          # Deterministic DB path & service settings
-│       │   ├── database.py        # SQLAlchemy engine & session dependency
-│       │   ├── main.py            # FastAPI app & CORS configuration
-│       │   ├── models.py          # ORM Models (Exams, Questions, Choices)
-│       │   ├── schemas.py         # Public Pydantic response models
-│       │   ├── seed.py            # Idempotent DB seeder
-│       │   └── routes/
-│       │       ├── health.py      # GET /health
-│       │       └── exams.py       # GET /api/exams
-│       ├── tests/                 # Backend automated test suite
-│       │   ├── conftest.py
-│       │   ├── test_health.py
-│       │   ├── test_exams.py
-│       │   ├── test_seeding.py
-│       │   └── test_security.py   # Recursive answer leakage tests
-│       ├── pyproject.toml
-│       └── requirements.txt
-├── docs/
-│   ├── api-contract.md            # Detailed REST & WebSocket API specification
-│   └── architecture.md            # System process boundaries & security model
-├── .gitignore
-├── .env.example
-├── package.json                   # Root monorepo workspace scripts
-└── README.md
+├── backend/                             # Canonical FastAPI Core Service & SQLite Database
+│   ├── app/
+│   │   ├── main.py                      # App entry point & static portal mounting
+│   │   ├── database.py                  # SQLAlchemy engine & SQLite persistence
+│   │   ├── models.py                    # Schema: Exam, Question, Session, Event, Answer
+│   │   ├── schemas.py                   # Pydantic v2 validation contracts
+│   │   ├── airtable.py                  # Airtable exam sync with local fallback cache
+│   │   ├── policy/                      # Policy engine, risk scoring, answer-seeking similarity
+│   │   ├── vision/                      # OpenCV head pose (solvePnP), face analysis
+│   │   └── routes/                      # Auth, Exams, Sessions, WebRTC signaling
+│   ├── tests/                           # 180+ pytest verification test suites
+│   ├── sentinel_exam.db                 # Seeded SQLite database (do not delete)
+│   └── requirements.txt
+├── frontend/                            # Electron Desktop Candidate Application
+│   ├── src/
+│   │   ├── main/                        # Electron main process (lifecycle, IPC, sandbox)
+│   │   ├── preload/                     # Context isolation bridge & webview preload
+│   │   └── renderer/                    # React 18 + TypeScript candidate UI
+│   │       └── src/
+│   │           ├── components/          # ExamWorkspace, ManagedBrowserTab, WebcamProctor
+│   │           └── api/                 # Autosave, offline queue, telemetry dispatch
+│   └── package.json
+└── apps/
+    └── proctor-web/                     # Examiner Live Monitoring Web Dashboard
+        ├── src/
+        │   ├── views/                   # LiveMonitoringView, ReportsView
+        │   └── hooks/                   # WebRTC signaling, WebSocket streams
+        └── package.json
 ```
 
 ---
 
-## 3. Prerequisites
+## 3. Windows Setup & Prerequisites
 
-- **Node.js**: `v20.x` or higher (verified on `v24.14.1`)
-- **npm**: `v10.x` or higher (verified on `v11.11.0`)
-- **Python**: `3.11.x` or higher (verified on `3.11.9`)
-- **Operating System**: Windows, macOS, or Linux
+### Prerequisites
+* **Operating System**: Windows 10/11 (or macOS / Linux)
+* **Python**: `3.11.x` or higher
+* **Node.js**: `v18.x` or `v20.x` LTS
+* **npm**: `v9.x` or higher
+
+### Installation Steps
+
+1. **Clone the repository**:
+   ```powershell
+   git clone <repo-url>
+   cd vistarx
+   ```
+
+2. **Configure Python Virtual Environment & Dependencies**:
+   ```powershell
+   cd backend
+   python -m venv .venv
+   .\.venv\Scripts\Activate.ps1
+   pip install -r requirements.txt
+   cd ..
+   ```
+
+3. **Install Node.js Dependencies**:
+   ```powershell
+   # Install Electron desktop client dependencies
+   cd frontend
+   npm install
+   cd ..
+
+   # Install Examiner dashboard dependencies
+   cd apps/proctor-web
+   npm install
+   cd ..
+   ```
 
 ---
 
-## 4. Setup & Running Instructions
+## 4. Execution Commands
 
-### Step 1: Install Dependencies
+### 1. Start the FastAPI Backend Server
+From the repository root (or `backend/` directory):
+```powershell
+cd backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+```
+* **API Documentation**: `http://localhost:8000/docs`
+* **Health Endpoint**: `http://localhost:8000/health`
+* **Student Web Portal**: `http://localhost:8000/portal`
+* **Built Examiner Dashboard**: `http://localhost:8000/proctor/`
 
-From the project root:
-
-```bash
-# Install desktop client dependencies
-npm install
-
-# Install backend dependencies (if running in a clean environment)
-pip install -r services/api/requirements.txt
+### 2. Start the Examiner Web Dashboard
+The dashboard is automatically compiled and served by FastAPI at `http://localhost:8000/proctor/`.  
+To run it in hot-reload developer mode independently:
+```powershell
+cd apps/proctor-web
+npm run dev
 ```
 
-### Step 2: Initialize & Seed Database
-
-Seed the SQLite database with the demo examination (5 technical MCQs):
-
-```bash
-npm run backend:seed
-```
-*Direct Python alternative:*
-```bash
-python services/api/app/seed.py
-```
-
-### Step 3: Start the Backend Service
-
-Start the FastAPI assessment server on `http://127.0.0.1:8000`:
-
-```bash
-npm run backend:run
-```
-*Direct Python alternative:*
-```bash
-python -m uvicorn app.main:app --app-dir services/api --host 127.0.0.1 --port 8000 --reload
-```
-
-### Step 4: Build & Launch the Desktop Application
-
+### 3. Start the Electron Desktop Application
 In a separate terminal:
-
-```bash
-# Build renderer, main, and preload bundles
-npm run desktop:build
-
-# Launch the desktop application
-npx electron apps/desktop
+```powershell
+cd frontend
+npm run start
 ```
-
-*Development hot-reload mode:*
-```bash
-# Run Vite renderer dev server
-npm run desktop:dev
-```
+*(Or use `npm run dev` for hot-reloading development mode).*
 
 ---
 
-## 5. Verification & Test Commands
+## 5. Two-Laptop LAN Demonstration Checklist
 
-### Run Backend Automated Tests
-Runs pytest covering health checks, exam schemas, idempotent seeding, and recursive answer leakage inspection:
+Use this checklist for an end-to-end evaluation across two laptops on the same Wi-Fi or LAN router:
 
-```bash
-npm run backend:test
 ```
-*Direct command:*
-```bash
-python -m pytest services/api/tests -v
+[Laptop A: Examiner & Server]                     [Laptop B: Student Candidate]
+  FastAPI Backend (0.0.0.0:8000)   <-- Wi-Fi -->    Electron Proctoring Browser
+  Examiner Dashboard (/proctor/)                    (VITE_API_URL=http://<Laptop-A-IP>:8000)
 ```
 
-### Run TypeScript & Production Build Checks
-```bash
-# Strict TypeScript check across renderer, main, and preload
-npm run desktop:check
+### Step 1: Identify Server IP on Laptop A
+1. Open PowerShell on **Laptop A** and run:
+   ```powershell
+   ipconfig
+   ```
+2. Note your **IPv4 Address** (e.g., `192.168.1.50`).
+3. Ensure Windows Firewall permits incoming TCP traffic on port 8000.
 
-# Production build test
-npm run desktop:build
-```
+### Step 2: Start Backend & Dashboard on Laptop A
+1. Start the FastAPI service:
+   ```powershell
+   cd vistarx/backend
+   python -m uvicorn app.main:app --host 0.0.0.0 --port 8000
+   ```
+2. In Google Chrome or Edge, navigate to: `http://localhost:8000/proctor/`
+3. Enter examiner access code: `TEACHER-UNLOCK-2026` (or `ELEV8-2026`).
+
+### Step 3: Launch Candidate App on Laptop B
+1. On **Laptop B**, set the backend URL pointing to Laptop A:
+   ```powershell
+   $env:VITE_API_URL="http://192.168.1.50:8000"
+   cd vistarx/frontend
+   npm run start
+   ```
+2. The candidate application will open to the Welcome screen.
+
+### Step 4: Step Through the Verification Flow
+* [x] **OTP Verification**: Enter candidate email and any 6-digit dev code (e.g. `123456`).
+* [x] **Camera & Hardware Check**: Candidate verifies webcam stream and microphone readiness.
+* [x] **Monitoring Disclosure**: Candidate reviews the explainable proctoring policy and clicks "I Understand & Agree".
+* [x] **Assessment Workspace**:
+  - Live candidate webcam feed renders in the Picture-in-Picture card in the bottom-right corner.
+  - Active question, choice palette, and server timer display clearly.
+* [x] **Laptop A Dashboard Verification**:
+  - Laptop A immediately shows candidate as "Active" in the candidate roster.
+  - WebRTC live camera stream connects.
+* [x] **Trigger Focus Loss**:
+  - On Laptop B, press <kbd>Alt</kbd>+<kbd>Tab</kbd> or click outside the Electron window.
+  - On Laptop A, the narrative timeline displays: *"Candidate switched away from MCQ assessment workspace"*.
+  - When returning, the timeline records exact duration away (e.g. *"Returned after 3.2s"*).
+* [x] **Managed Research & AI Query Detection**:
+  - On Laptop B, click the **Research & Permitted Web** tab.
+  - Notice the dark slate interface with no white bars, featuring Google, ChatGPT, Claude, and Gemini quick-launch buttons.
+  - In Google or Claude, search a question-related query (e.g. *"Electron contextIsolation nodeIntegration web renderer isolation"*).
+  - On Laptop A, the timeline displays:
+    ```
+    Search query on Google:
+    "Electron contextIsolation nodeIntegration..."
+    [LIKELY ANSWER-SEEKING (78% MATCH)]
+    Matched keywords: contextisolation, electron, isolated, renderer
+    ```
+  - The SVG **Risk Trajectory Chart** updates its risk score curve in real time.
+* [x] **Submit & Score Storage**:
+  - On Laptop B, answer questions (observe autosave status badge in header: `saved`).
+  - Click **Submit Assessment**.
+  - Laptop A reflects status `submitted`. The Results table updates with server-side percentage, score, and complete audit trail exportable to CSV and JSON.
 
 ---
 
-## 6. API Endpoint Examples
+## 6. Access Credentials & Demo Keys
 
-### 1. Health Status (`GET /health`)
-```bash
-curl -s http://127.0.0.1:8000/health
-```
-```json
-{
-  "status": "ok",
-  "service": "sentinel-exam-api",
-  "version": "0.1.0",
-  "database": "connected"
-}
-```
-
-### 2. Available Exams (`GET /api/exams`)
-```bash
-curl -s http://127.0.0.1:8000/api/exams
-```
-```json
-[
-  {
-    "id": "e0000000-0000-4000-8000-000000000001",
-    "title": "Systems Engineering & Secure Computing Assessment",
-    "description": "Foundational evaluation of desktop process isolation, network security boundaries, and defensive software architecture.",
-    "duration_minutes": 30,
-    "total_questions": 5,
-    "questions": [
-      {
-        "id": "q0000000-0000-4000-8000-000000000001",
-        "question_number": 1,
-        "text": "In an Electron desktop application architecture, which configuration is mandatory to guarantee that Node.js runtime APIs are completely isolated from the web renderer?",
-        "choices": [
-          {
-            "id": "c0000000-0000-4000-8000-000000000001",
-            "choice_letter": "A",
-            "text": "Set contextIsolation: true and nodeIntegration: false in WebPreferences"
-          },
-          {
-            "id": "c0000000-0000-4000-8000-000000000002",
-            "choice_letter": "B",
-            "text": "Disable webSecurity and enable allowRunningInsecureContent"
-          },
-          {
-            "id": "c0000000-0000-4000-8000-000000000003",
-            "choice_letter": "C",
-            "text": "Enable the remote module and execute scripts in a Web Worker"
-          },
-          {
-            "id": "c0000000-0000-4000-8000-000000000004",
-            "choice_letter": "D",
-            "text": "Set sandbox: false and configure nodeIntegrationInSubFrames: true"
-          }
-        ]
-      }
-    ]
-  }
-]
-```
+| Role | Key / Code | Purpose |
+| :--- | :--- | :--- |
+| **Examiner Access Code** | `TEACHER-UNLOCK-2026` | Login to Proctor Web Dashboard |
+| **Alternative Access Codes**| `ELEV8-2026`, `SUPERVISOR-KEY` | Secondary teacher override codes |
+| **Candidate OTP (Dev Mode)**| Any 6 digits (e.g. `123456`) | Student verification login |
+| **Seeded Assessment ID** | `e0000000-0000-4000-8000-000000000001` | *Systems Engineering Assessment* |
 
 ---
 
-## 7. Security Decisions
+## 7. Honest Technical Limitations
 
-1. **Process Isolation**: The Electron main process explicitly enforces `contextIsolation: true`, `nodeIntegration: false`, and `sandbox: true`. The renderer operates in a standard Chromium sandbox with zero access to Node.js built-ins or the host filesystem.
-2. **Minimal Typed IPC Bridge**: The preload script exposes only `window.sentinelBridge`, restricting renderer communication to platform metadata and focus telemetry. No arbitrary IPC send or invoke capabilities are exposed.
-3. **Restrictive Content Security Policy**: Embedded in both HTTP response headers and `index.html`, prohibiting inline `eval()`, object plugins, and remote untrusted script origins.
-4. **Navigation Locks**: `will-navigate` blocks navigation away from the local application origin, and `setWindowOpenHandler` denies all unauthorized popup window requests.
-5. **Private Answer Keys**: Correct choice IDs reside exclusively in the SQLite database (`Question.correct_choice_id`) and are strictly excluded from public Pydantic schemas. Verified by automated tests that recursively scan responses.
+We believe transparency is critical for proctoring integrity:
 
----
+1. **Passive Hardware Splitters & Second Devices**:
+   - Software running on an operating system cannot detect passive physical HDMI splitters, secondary hardware capture cards, or separate physical mobile phones positioned off-camera.
+   - Dual-display software detection monitors OS display configurations (`screen.getAllDisplays()`), but physical hardware cloning bypasses OS-level screen enumeration.
 
-## 8. Implemented vs. Planned Features
-
-| Feature | Foundation Milestone | Planned Future Milestones |
-|---|---|---|
-| **Desktop Shell** | Implemented (Electron + React 18 + Vite) | Assessment fullscreen lock mode |
-| **Process Security** | Implemented (`contextIsolation`, `sandbox`, CSP) | OS-level application restriction |
-| **Backend REST API** | Implemented (`/health`, `/api/exams`) | Sessions, submissions, and admin routes |
-| **Database & Seeding**| Implemented (SQLite, deterministic 5 MCQs) | Dynamic exam authoring & migrations |
-| **Answer Security** | Implemented (Private DB keys, zero leak) | Cryptographic submission receipts |
-| **Window Telemetry** | Implemented (Focus/blur native events) | Telemetry ingestion endpoint (`/events`) |
-| **Camera Proctoring**| Architectural hooks prepared | OpenCV/MediaPipe face presence detector |
-| **Examiner Dashboard**| Documented in API contract | Real-time review timeline & WebSocket |
+2. **Managed Sandbox Boundary**:
+   - Query capture and prompt observation operate strictly within the Electron application's embedded `<webview>` surface.
+   - Keystrokes typed into native external applications running outside the Electron shell (e.g., an independent Chrome browser window or third-party desktop app) cannot be intercepted due to operating system process isolation and user privacy boundaries.
 
 ---
 
-## 9. Troubleshooting
+## 8. Automated Verification Suite
 
-- **Database not found**: The database path is resolved relative to the service directory (`services/api/sentinel_exam.db`). If testing in custom paths, set the `SENTINEL_DB_PATH` environment variable.
-- **Port 8000 in use**: Start uvicorn on another port with `--port 8001` and update `VITE_API_URL=http://127.0.0.1:8001` in your environment or launch flags.
-- **Electron window blank**: Ensure `npm run desktop:build` was executed prior to running `npx electron apps/desktop`.
+Run all automated unit, integration, and security test suites:
 
----
+```powershell
+cd backend
+pytest tests/
+```
 
-## 10. Known Limitations
-
-- **Computer Vision Proctoring**: Facial tracking and multi-face signals are planned for future milestones and are intentionally not mocked with fake data in this foundation release.
-- **Assessment Submission**: In accordance with the foundation milestone specifications, answer submission and session lifecycle endpoints are documented in `docs/api-contract.md` but not active.
+Expected output: **180+ tests passing (100% pass rate)** including:
+- Backend core OTP, sessions, autosave, server-authoritative timer, and scoring.
+- Policy engine, unified event model, and explainable risk decomposition.
+- Answer-seeking semantic similarity detection and duplicate-login detection.
+- Milestone 1 empirical challenge and adversarial computer vision tests.
+- Zero answer key leakage verification.

@@ -39,6 +39,12 @@ def make_test_image_b64(width=640, height=480, draw_face_circle=False) -> str:
         cv2.circle(img, (width // 2 + 25, height // 2 - 15), 6, (30, 30, 30), -1)
         # Mouth line
         cv2.line(img, (width // 2 - 20, height // 2 + 25), (width // 2 + 20, height // 2 + 25), (30, 30, 30), 3)
+    else:
+        # Ambient room lighting gradient & subtle structural background (sigma > 10, laplacian > 30)
+        for y in range(height):
+            img[y, :, :] = np.clip(img[y, :, :] + int((y / height) * 40 - 20), 0, 255)
+        img[::40, :, :] = np.clip(img[::40, :, :] + 15, 0, 255)
+        img[:, ::40, :] = np.clip(img[:, ::40, :] - 15, 0, 255)
 
     _, buf = cv2.imencode('.jpg', img)
     return base64.b64encode(buf.tobytes()).decode('ascii')

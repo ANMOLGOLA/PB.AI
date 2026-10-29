@@ -28,6 +28,7 @@ def init_db() -> None:
     """Create all registered database tables if they do not already exist."""
     # Ensure parent directory exists
     settings.DB_PATH.parent.mkdir(parents=True, exist_ok=True)
+    import app.models  # noqa: F401
     Base.metadata.create_all(bind=engine)
 
     # Lightweight SQLite column schema migration
@@ -42,6 +43,20 @@ def init_db() -> None:
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN face_signature TEXT"))
                 if "is_locked" not in cols:
                     conn.execute(text("ALTER TABLE sessions ADD COLUMN is_locked INTEGER DEFAULT 0"))
+                conn.commit()
+
+            # Migrate integrity_events table for proctor review status
+            ev_cursor = conn.execute(text("PRAGMA table_info(integrity_events)"))
+            ev_cols = [row[1] for row in ev_cursor.fetchall()]
+            if ev_cols:
+                if "review_status" not in ev_cols:
+                    conn.execute(text("ALTER TABLE integrity_events ADD COLUMN review_status VARCHAR(30) DEFAULT 'unreviewed'"))
+                if "review_notes" not in ev_cols:
+                    conn.execute(text("ALTER TABLE integrity_events ADD COLUMN review_notes TEXT"))
+                if "reviewed_by" not in ev_cols:
+                    conn.execute(text("ALTER TABLE integrity_events ADD COLUMN reviewed_by VARCHAR(100)"))
+                if "reviewed_at" not in ev_cols:
+                    conn.execute(text("ALTER TABLE integrity_events ADD COLUMN reviewed_at DATETIME"))
                 conn.commit()
     except Exception:
         pass

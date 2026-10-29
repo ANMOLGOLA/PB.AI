@@ -248,6 +248,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                     <li><strong>Candidate Face ID:</strong> Locks exam to your biometric identity. If anyone else sits in your place, impersonation warning triggers immediately.</li>
                     <li><strong>Phone &amp; Object Detection:</strong> Detects unauthorized mobile phones or objects in frame.</li>
                     <li><strong>Strict Anti-Escape Lockdown:</strong> Window, Windows key, and Alt+Tab are intercepted.</li>
+                    <li><strong>Live Screen Sharing:</strong> Explicit screen sharing allows authorized proctors to view your display in real-time via WebRTC.</li>
                     <li><strong>5-Warning Policy:</strong> Reaching 5 warnings locks the exam, requiring Teacher Code unlock.</li>
                   </ul>
                 </div>

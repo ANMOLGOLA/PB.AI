@@ -145,7 +145,7 @@ export const ExamRulesPage: React.FC<ExamRulesPageProps> = ({
               No Sunglasses or Smart Glasses
             </h4>
             <p style={{ fontSize: '0.8125rem', color: '#B91C1C', lineHeight: 1.5 }}>
-              Dark lenses, tinted eyewear, and smart glasses are strictly prohibited. Eyes must remain 100% visible for gaze tracking.
+              Dark lenses, tinted eyewear, and smart glasses are strictly prohibited. Face must remain 100% visible for head orientation monitoring.
             </p>
           </div>
 
@@ -265,7 +265,7 @@ export const ExamRulesPage: React.FC<ExamRulesPageProps> = ({
               style={{ width: '18px', height: '18px', accentColor: 'var(--color-accent)' }}
             />
             <span style={{ fontSize: '0.875rem', fontWeight: 500 }}>
-              I consent to continuous MediaPipe computer-vision eye tracking, face detection, and Where U Elevate audit logging.
+              I consent to continuous MediaPipe computer-vision head pose estimation, face detection, and Where U Elevate audit logging.
             </span>
           </label>
         </div>
@@ -295,7 +295,7 @@ export const ExamRulesPage: React.FC<ExamRulesPageProps> = ({
               gap: '10px'
             }}
           >
-            <span>{allAgreed ? 'Launch Lockdown & Begin Assessment' : 'Acknowledge All Rules to Proceed'}</span>
+            <span>{allAgreed ? 'Proceed to Screen & Camera Readiness' : 'Acknowledge All Rules to Proceed'}</span>
             <ArrowRight size={18} />
           </button>
         </div>
