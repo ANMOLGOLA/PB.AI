@@ -1,0 +1,19 @@
+{
+  "name": "sentinel-exam",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Secure, smart proctoring browser and assessment platform",
+  "workspaces": [
+    "apps/*"
+  ],
+  "scripts": {
+    "desktop:install": "npm install --workspace=apps/desktop",
+    "desktop:build": "npm run build --workspace=apps/desktop",
+    "desktop:check": "npm run typecheck --workspace=apps/desktop",
+    "desktop:dev": "npm run dev:renderer --workspace=apps/desktop",
+    "backend:seed": "python services/api/app/seed.py",
+    "backend:run": "python -m uvicorn app.main:app --app-dir services/api --host 127.0.0.1 --port 8000 --reload",
+    "backend:test": "python -m pytest services/api/tests -v",
+    "test": "npm run backend:test && npm run desktop:check"
+  }
+}
