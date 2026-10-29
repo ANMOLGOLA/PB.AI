@@ -35,6 +35,39 @@ export async function fetchExams(baseUrl: string): Promise<PublicExam[]> {
 }
 
 /**
+ * Configure or update Groq API Key on the backend.
+ */
+export async function setGroqApiKey(
+  baseUrl: string,
+  apiKey: string
+): Promise<{ status: string; message: string; groq_configured: boolean }> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/config/groq-key`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ api_key: apiKey })
+  });
+  if (!response.ok) throw new Error('Failed to configure Groq API Key');
+  return response.json();
+}
+
+/**
+ * Check Groq API configuration status.
+ */
+export async function getGroqStatus(
+  baseUrl: string
+): Promise<{ groq_configured: boolean; model: string }> {
+  try {
+    const url = `${baseUrl.replace(/\/$/, '')}/api/config/groq-status`;
+    const response = await fetch(url);
+    if (!response.ok) return { groq_configured: false, model: 'llama-3.2-11b-vision-preview' };
+    return response.json();
+  } catch {
+    return { groq_configured: false, model: 'llama-3.2-11b-vision-preview' };
+  }
+}
+
+/**
  * Initialize a monitored examination session.
  */
 export async function createSession(

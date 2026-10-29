@@ -9,9 +9,11 @@ import {
   AlertTriangle,
   Smartphone,
   Eye,
-  RefreshCw
+  RefreshCw,
+  KeyRound,
+  Cpu
 } from 'lucide-react';
-import { scanPreExamFace } from '../api/client';
+import { scanPreExamFace, setGroqApiKey, getGroqStatus } from '../api/client';
 import { PublicExam, PreExamScanResult } from '../api/types';
 
 interface CandidateOnboardingProps {
@@ -30,6 +32,11 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const [candidateName, setCandidateName] = useState('Parv Mishra');
   const [candidateId, setCandidateId] = useState('CAND-2026-001');
 
+  // Groq API Key state
+  const [groqKeyInput, setGroqKeyInput] = useState<string>('');
+  const [isGroqActive, setIsGroqActive] = useState<boolean>(false);
+  const [groqStatusMsg, setGroqStatusMsg] = useState<string | null>(null);
+
   // Pre-exam biometric & device scan states
   const [isScanning, setIsScanning] = useState<boolean>(false);
   const [scanResult, setScanResult] = useState<PreExamScanResult | null>(null);
@@ -38,6 +45,25 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [cameraActive, setCameraActive] = useState<boolean>(false);
+
+  // Check Groq status on mount
+  useEffect(() => {
+    getGroqStatus(backendUrl).then((res) => {
+      setIsGroqActive(res.groq_configured);
+    }).catch(console.warn);
+  }, [backendUrl]);
+
+  const handleSaveGroqKey = async () => {
+    if (!groqKeyInput.trim()) return;
+    try {
+      const res = await setGroqApiKey(backendUrl, groqKeyInput.trim());
+      setIsGroqActive(res.groq_configured);
+      setGroqStatusMsg('Groq Vision API connected! AI verification active.');
+      setTimeout(() => setGroqStatusMsg(null), 4000);
+    } catch {
+      setGroqStatusMsg('Failed to save Groq Key. Please check the key.');
+    }
+  };
 
   // Initialize camera for self-check & scan
   useEffect(() => {
@@ -132,6 +158,22 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
               <span style={{ fontSize: '0.75rem', fontWeight: 700, textTransform: 'uppercase', color: 'var(--color-accent)', letterSpacing: '0.05em' }}>
                 Where U Elevate Assessment Center
               </span>
+              <span
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: '4px',
+                  backgroundColor: isGroqActive ? '#ECFDF5' : '#F1F5F9',
+                  color: isGroqActive ? '#059669' : '#64748B',
+                  border: `1px solid ${isGroqActive ? '#A7F3D0' : '#CBD5E1'}`,
+                  borderRadius: '12px',
+                  padding: '2px 8px',
+                  fontSize: '0.6875rem',
+                  fontWeight: 700
+                }}
+              >
+                <Cpu size={12} /> {isGroqActive ? 'Groq Vision LPU Active' : 'Groq API Ready'}
+              </span>
             </div>
             <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Candidate Biometric Face ID Enrollment</h2>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
@@ -142,7 +184,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', margin: '24px 0' }}>
-            {/* Left Column: Candidate Info & Protections */}
+            {/* Left Column: Candidate Info & Groq Vision Key Input */}
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px' }}>
                 Candidate Full Name
@@ -182,15 +224,62 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                 }}
               />
 
-              <div className="notice-box info" style={{ marginTop: '20px' }}>
+              {/* Groq API Key Input Configuration Card */}
+              <div
+                style={{
+                  marginTop: '18px',
+                  padding: '14px',
+                  borderRadius: 'var(--radius-md)',
+                  backgroundColor: '#F8FAFC',
+                  border: '1px solid var(--color-border)'
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
+                  <KeyRound size={16} color="var(--color-accent)" />
+                  <span style={{ fontSize: '0.8125rem', fontWeight: 700, color: 'var(--color-text-primary)' }}>
+                    Groq Vision API Key (Llama 3.2 Vision)
+                  </span>
+                </div>
+
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <input
+                    type="password"
+                    placeholder="gsk_... (or set via GROQ_API_KEY)"
+                    value={groqKeyInput}
+                    onChange={(e) => setGroqKeyInput(e.target.value)}
+                    style={{
+                      flex: 1,
+                      padding: '8px 10px',
+                      fontSize: '0.8125rem',
+                      borderRadius: '4px',
+                      border: '1px solid var(--color-border)'
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveGroqKey}
+                    className="btn btn-secondary"
+                    style={{ padding: '8px 12px', fontSize: '0.8125rem', fontWeight: 600 }}
+                  >
+                    Connect
+                  </button>
+                </div>
+                {groqStatusMsg && (
+                  <div style={{ fontSize: '0.75rem', marginTop: '6px', color: '#059669', fontWeight: 600 }}>
+                    {groqStatusMsg}
+                  </div>
+                )}
+              </div>
+
+              <div className="notice-box info" style={{ marginTop: '16px' }}>
                 <Shield size={18} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--color-accent)' }} />
                 <div style={{ fontSize: '0.8125rem', lineHeight: 1.5 }}>
-                  <strong>Security &amp; Integrity Protections:</strong>
+                  <strong>Powered by Groq Vision &amp; Kiosk Lockdown:</strong>
                   <ul style={{ paddingLeft: '16px', marginTop: '6px' }}>
-                    <li><strong>Candidate Face ID:</strong> Locks exam to your biometric identity. If anyone else sits in your place, impersonation warning triggers immediately.</li>
-                    <li><strong>Phone &amp; Object Detection:</strong> Detects unauthorized mobile phones or objects in frame.</li>
-                    <li><strong>Strict Anti-Escape Lockdown:</strong> Window, Windows key, and Alt+Tab are intercepted.</li>
-                    <li><strong>5-Warning Policy:</strong> Reaching 5 warnings locks the exam, requiring Teacher Code unlock.</li>
+                    <li><strong>Candidate Face ID:</strong> Biometric identity prevents substitute persons/friends.</li>
+                    <li><strong>Object Detection:</strong> Detects unauthorized mobile phones or foreign devices.</li>
+                    <li><strong>Anti-Escape Lockdown:</strong> Windows key, Alt+Tab, and Escape intercepted.</li>
+                    <li><strong>5-Warning Policy:</strong> Reaching 5 warnings locks exam (Teacher Code unlock).</li>
                   </ul>
                 </div>
               </div>
@@ -258,7 +347,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                     }}
                   >
                     <RefreshCw size={28} className="spin-icon" style={{ animation: 'spin 1s linear infinite' }} />
-                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Enrolling Candidate Biometrics...</span>
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Analyzing Face with Groq Vision...</span>
                   </div>
                 )}
               </div>

@@ -29,6 +29,30 @@ from app.proctoring import analyze_camera_frame
 router = APIRouter(prefix="/api", tags=["Sessions & Proctoring"])
 
 
+@router.get("/config/groq-status")
+def get_groq_status():
+    """Check if Groq Multimodal Vision API is configured and ready."""
+    return {
+        "groq_configured": bool(settings.GROQ_API_KEY),
+        "model": settings.GROQ_VISION_MODEL
+    }
+
+
+@router.post("/config/groq-key")
+def configure_groq_key(payload: dict):
+    """Dynamically set or update Groq API key for vision proctoring."""
+    key = payload.get("api_key", "").strip()
+    if not key:
+        raise HTTPException(status_code=400, detail="API key is required")
+    settings.GROQ_API_KEY = key
+    return {
+        "status": "ok",
+        "message": "Groq API Key configured successfully. Vision proctoring is active.",
+        "groq_configured": True,
+        "model": settings.GROQ_VISION_MODEL
+    }
+
+
 @router.post("/sessions", response_model=SessionResponse, status_code=status.HTTP_201_CREATED)
 def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db)):
     """Initialize a monitored examination session for a candidate."""
