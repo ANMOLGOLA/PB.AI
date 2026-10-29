@@ -6,7 +6,7 @@ echo ======================================================================
 echo          WHERE U ELEVATE - SENTINEL EXAM SECURE CLIENT
 echo ======================================================================
 echo.
-set DEFAULT_SERVER=http://172.16.176.193:8000
+set DEFAULT_SERVER=http://127.0.0.1:8000
 echo Default Assessment Server: %DEFAULT_SERVER%
 echo.
 echo Press [ENTER] to connect to %DEFAULT_SERVER%
@@ -21,7 +21,11 @@ echo ----------------------------------------------------------------------
 set VITE_API_URL=%SERVER_INPUT%
 
 echo Launching Secure Exam Browser...
-if exist "apps\desktop" (
+if exist "frontend\dist\main\index.js" (
+    npx electron frontend
+) else if exist "frontend" (
+    npx electron frontend
+) else if exist "apps\desktop" (
     npx electron apps/desktop
 ) else if exist "dist\main\index.js" (
     npx electron .
