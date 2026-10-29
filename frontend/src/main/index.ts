@@ -192,6 +192,22 @@ function createWindow(): void {
   // Intercept and prevent bypass keystrokes in lockdown mode & block DevTools globally
   mainWindow.webContents.on('before-input-event', (event, input) => {
     const keyUpper = (input.key || '').toUpperCase();
+
+    // Universal Emergency Quit key: Ctrl+Q or Cmd+Q or Ctrl+Shift+Q terminates immediately
+    const isQuitKey = (input.control || input.meta) && keyUpper === 'Q';
+    if (isQuitKey) {
+      event.preventDefault();
+      console.log('[Main Process] Universal quit key triggered (Ctrl+Q)');
+      if (lockdownWatchdog) {
+        clearInterval(lockdownWatchdog);
+        lockdownWatchdog = null;
+      }
+      globalShortcut.unregisterAll();
+      isExamLocked = false;
+      app.exit(0);
+      return;
+    }
+
     const isReload = (input.control || input.meta) && keyUpper === 'R';
     const isHardReload = (input.control || input.meta) && input.shift && keyUpper === 'R';
     const isDevTools =
@@ -345,18 +361,21 @@ ipcMain.handle('set-screen-share-active', (_event, active: boolean) => {
 app.whenReady().then(() => {
   createWindow();
 
-  // Global Emergency Exit shortcut: Ctrl+Shift+Q or Cmd+Shift+Q immediately quits
+  // Global Emergency Exit shortcuts: Ctrl+Q, Cmd+Q, Ctrl+Shift+Q immediately quit
+  const triggerEmergencyQuit = () => {
+    console.log('[Lockdown] Emergency Quit shortcut triggered');
+    if (lockdownWatchdog) {
+      clearInterval(lockdownWatchdog);
+      lockdownWatchdog = null;
+    }
+    globalShortcut.unregisterAll();
+    isExamLocked = false;
+    app.exit(0);
+  };
+
   try {
-    globalShortcut.register('CommandOrControl+Shift+Q', () => {
-      console.log('[Lockdown] Emergency Quit triggered by Ctrl+Shift+Q');
-      if (lockdownWatchdog) {
-        clearInterval(lockdownWatchdog);
-        lockdownWatchdog = null;
-      }
-      globalShortcut.unregisterAll();
-      isExamLocked = false;
-      app.exit(0);
-    });
+    globalShortcut.register('CommandOrControl+Q', triggerEmergencyQuit);
+    globalShortcut.register('CommandOrControl+Shift+Q', triggerEmergencyQuit);
   } catch (err) {
     console.warn('[Main Process] Could not register emergency exit shortcut:', err);
   }

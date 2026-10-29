@@ -72,12 +72,10 @@ export const PreExamPortal: React.FC<PreExamPortalProps> = ({
   };
 
   const handleQuitApp = () => {
-    if (window.confirm('Are you sure you want to exit the examination browser?')) {
-      if (window.sentinelBridge && window.sentinelBridge.closeApp) {
-        window.sentinelBridge.closeApp();
-      } else {
-        window.close();
-      }
+    if (window.sentinelBridge && window.sentinelBridge.closeApp) {
+      window.sentinelBridge.closeApp();
+    } else {
+      window.close();
     }
   };
 

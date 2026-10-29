@@ -406,11 +406,42 @@ def unlock_session(
     db.add(unlock_event)
     db.commit()
 
+    # Notify connected candidate via WebRTC signaling WebSocket if active
+    room = signaling_manager.rooms.get(session_id)
+    if room and room.candidate_ws:
+        import asyncio
+        try:
+            asyncio.create_task(
+                room.candidate_ws.send_text(json.dumps({
+                    "type": "remote_unlock",
+                    "session_id": session_id,
+                    "message": "Lockout override granted by proctor."
+                }))
+            )
+        except Exception:
+            pass
+
     return TeacherUnlockResponse(
         unlocked=True,
         session_id=session_id,
         message="Assessment access successfully restored by teacher authorization."
     )
+
+
+@router.get("/sessions/{session_id}/status")
+def get_session_status(session_id: str, db: Session = Depends(get_db)):
+    """
+    Lightweight polling endpoint to check candidate session lock and progression status.
+    Enables instant remote unlock and synchronization between proctor and student portal.
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+    return {
+        "session_id": session_id,
+        "is_locked": bool(exam_session.is_locked),
+        "status": exam_session.status
+    }
 
 
 @router.get("/sessions/{session_id}/answers")

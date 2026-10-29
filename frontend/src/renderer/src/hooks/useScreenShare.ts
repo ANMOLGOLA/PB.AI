@@ -14,12 +14,14 @@ interface UseScreenShareOptions {
   backendUrl: string;
   sessionId: string;
   onStateChange?: (state: ScreenShareState, details?: string) => void;
+  onRemoteUnlock?: () => void;
 }
 
 export function useScreenShare({
   backendUrl,
   sessionId,
-  onStateChange
+  onStateChange,
+  onRemoteUnlock
 }: UseScreenShareOptions) {
   const [state, setState] = useState<ScreenShareState>('idle');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -430,7 +432,11 @@ export function useScreenShare({
             const data = JSON.parse(event.data);
             console.log('[WebRTC Candidate] Received signaling message:', data.type);
 
-            if (data.type === 'peer_status') {
+            if (data.type === 'remote_unlock') {
+              console.log('[WebRTC Candidate] Received remote_unlock signal from proctor!');
+              window.dispatchEvent(new CustomEvent('sentinel-remote-unlock'));
+              onRemoteUnlock?.();
+            } else if (data.type === 'peer_status') {
               console.log('[WebRTC Candidate] Peer status:', data);
               if (data.peer_connected) {
                 if (pc.signalingState === 'stable') {

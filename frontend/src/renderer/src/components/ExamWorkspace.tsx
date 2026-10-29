@@ -66,7 +66,56 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
   const [unlockError, setUnlockError] = useState<string | null>(null);
 
   const [showSubmitConfirm, setShowSubmitConfirm] = useState<boolean>(false);
+  const [showExitConfirm, setShowExitConfirm] = useState<boolean>(false);
+  const [isExiting, setIsExiting] = useState<boolean>(false);
   const hasInterruptionLoggedRef = useRef<boolean>(false);
+
+  const handleExecuteExit = useCallback(() => {
+    setIsExiting(true);
+    if (window.sentinelBridge && window.sentinelBridge.closeApp) {
+      window.sentinelBridge.closeApp();
+    } else {
+      window.close();
+    }
+  }, []);
+
+  const handleRemoteUnlockDismiss = useCallback(() => {
+    console.log('[ExamWorkspace] Remote unlock applied. Restoring exam workspace.');
+    setIsLockedOut(false);
+    setWarningCount(0);
+    setTeacherCodeInput('');
+    setUnlockError(null);
+  }, []);
+
+  // Poll session status while locked out to support one-click remote unlock from proctor dashboard
+  useEffect(() => {
+    if (!isLockedOut) return undefined;
+
+    const pollInterval = setInterval(async () => {
+      try {
+        const res = await fetch(`${backendUrl}/api/sessions/${session.id}/status`);
+        if (res.ok) {
+          const data = await res.json();
+          if (data.is_locked === false) {
+            console.log('[ExamWorkspace] Detected session unlocked by proctor via status poll.');
+            handleRemoteUnlockDismiss();
+          }
+        }
+      } catch {
+        // ignore network glitches
+      }
+    }, 1500);
+
+    const handleCustomRemoteUnlock = () => {
+      handleRemoteUnlockDismiss();
+    };
+    window.addEventListener('sentinel-remote-unlock', handleCustomRemoteUnlock);
+
+    return () => {
+      clearInterval(pollInterval);
+      window.removeEventListener('sentinel-remote-unlock', handleCustomRemoteUnlock);
+    };
+  }, [isLockedOut, backendUrl, session.id, handleRemoteUnlockDismiss]);
 
   const isScreenSharingActive =
     screenShareState === 'active' || screenShareState === 'ready';
@@ -313,15 +362,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
 
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('Are you sure you want to exit the exam browser? All answered questions will be saved.')) {
-                if (window.sentinelBridge && window.sentinelBridge.closeApp) {
-                  window.sentinelBridge.closeApp();
-                } else {
-                  window.close();
-                }
-              }
-            }}
+            onClick={() => setShowExitConfirm(true)}
             style={{
               padding: '7px 12px',
               backgroundColor: 'rgba(239, 68, 68, 0.2)',
@@ -335,7 +376,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
               alignItems: 'center',
               gap: '6px'
             }}
-            title="Quit Application (Shortcut: Ctrl+Shift+Q)"
+            title="Quit Application (Ctrl+Q)"
           >
             <LogOut size={13} />
             <span>Quit</span>
@@ -641,7 +682,7 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
       </main>
 
       {/* Screen Sharing Interruption Blocker Modal */}
-      {!isScreenSharingActive && !isLockedOut && (
+      {!isScreenSharingActive && !isLockedOut && !isExiting && !showExitConfirm && !isSubmitting && (
         <div
           style={{
             position: 'fixed',
@@ -689,15 +730,35 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
               Screen sharing is required. Allow access and try again. Exam question interactions and the countdown timer are paused until sharing is restored.
             </p>
 
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => onStartScreenShare(null)}
-              style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '0.9375rem', fontWeight: 700 }}
-            >
-              <Monitor size={16} />
-              <span>Resume Entire Screen Sharing</span>
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => onStartScreenShare(null)}
+                style={{ width: '100%', justifyContent: 'center', padding: '12px', fontSize: '0.9375rem', fontWeight: 700 }}
+              >
+                <Monitor size={16} />
+                <span>Resume Entire Screen Sharing</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowExitConfirm(true)}
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  backgroundColor: 'transparent',
+                  color: '#EF4444',
+                  border: '1px solid #FCA5A5',
+                  borderRadius: '6px',
+                  fontSize: '0.875rem',
+                  fontWeight: 600,
+                  cursor: 'pointer'
+                }}
+              >
+                Quit / Exit Assessment
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -755,6 +816,29 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
               Your assessment session has been locked due to repeated integrity alerts. A proctor or examiner must authorize your session to resume.
             </p>
 
+            <div style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '10px',
+              padding: '10px 14px',
+              backgroundColor: '#EFF6FF',
+              borderRadius: '8px',
+              border: '1px solid #BFDBFE',
+              marginBottom: '18px',
+              color: '#1D4ED8',
+              fontSize: '0.8125rem'
+            }}>
+              <span style={{
+                width: '9px',
+                height: '9px',
+                borderRadius: '50%',
+                backgroundColor: '#2563EB',
+                boxShadow: '0 0 0 3px rgba(37, 99, 235, 0.25)',
+                display: 'inline-block'
+              }} />
+              <span>Waiting for Proctor Remote Unlock (or enter invigilator code below):</span>
+            </div>
+
             <form onSubmit={handleTeacherUnlock}>
               <label style={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: '#0F172A', marginBottom: '8px' }}>
                 Proctor / Teacher Authorization Code
@@ -794,6 +878,23 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
                 </div>
               )}
             </form>
+
+            <div style={{ marginTop: '20px', textAlign: 'center' }}>
+              <button
+                type="button"
+                onClick={() => setShowExitConfirm(true)}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: '#64748B',
+                  fontSize: '0.8125rem',
+                  textDecoration: 'underline',
+                  cursor: 'pointer'
+                }}
+              >
+                Quit Assessment (All saved answers are preserved)
+              </button>
+            </div>
           </div>
         </div>
       )}
@@ -868,6 +969,59 @@ export const ExamWorkspace: React.FC<ExamWorkspaceProps> = ({
                 disabled={isSubmitting}
               >
                 {isSubmitting ? 'Submitting...' : 'Confirm Submission'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Exit Confirmation Modal */}
+      {showExitConfirm && (
+        <div
+          style={{
+            position: 'fixed',
+            inset: 0,
+            backgroundColor: 'rgba(15, 23, 42, 0.85)',
+            backdropFilter: 'blur(6px)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 100005,
+            padding: '24px'
+          }}
+        >
+          <div
+            className="card"
+            style={{
+              maxWidth: '440px',
+              width: '100%',
+              padding: '28px',
+              textAlign: 'center',
+              border: '2px solid #EF4444',
+              boxShadow: '0 25px 50px rgba(0,0,0,0.5)'
+            }}
+          >
+            <h3 style={{ fontSize: '1.25rem', fontWeight: 800, color: '#0F172A', marginBottom: '8px' }}>
+              Exit Assessment Application?
+            </h3>
+            <p style={{ fontSize: '0.875rem', color: '#64748B', lineHeight: 1.5, marginBottom: '24px' }}>
+              Are you sure you want to exit the exam browser? All answered questions have been securely saved to the server.
+            </p>
+            <div style={{ display: 'flex', gap: '12px' }}>
+              <button
+                type="button"
+                className="btn btn-secondary"
+                onClick={() => setShowExitConfirm(false)}
+                style={{ flex: 1, justifyContent: 'center' }}
+              >
+                Cancel / Return
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={handleExecuteExit}
+                style={{ flex: 1, justifyContent: 'center', backgroundColor: '#DC2626', color: '#FFFFFF' }}
+              >
+                Yes, Exit App
               </button>
             </div>
           </div>
