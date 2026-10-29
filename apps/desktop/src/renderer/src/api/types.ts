@@ -52,6 +52,8 @@ export interface AnalyzeFrameResult {
   confidence: number;
   status: 'verified' | 'no_face' | 'multiple_faces' | string;
   bounding_boxes: BoundingBox[];
+  frame_width?: number;
+  frame_height?: number;
 }
 
 export interface IntegrityEventRecord {

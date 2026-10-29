@@ -20,21 +20,24 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [streamActive, setStreamActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [analysis, setAnalysis] = useState<AnalyzeFrameResult>({
     face_detected: true,
     face_count: 1,
     confidence: 0.98,
     status: 'verified',
-    bounding_boxes: []
+    bounding_boxes: [],
+    frame_width: 640,
+    frame_height: 480
   });
 
-  // Start webcam
+  // Start webcam with high quality for reliable face detection
   useEffect(() => {
     let currentStream: MediaStream | null = null;
 
     navigator.mediaDevices
       .getUserMedia({
-        video: { width: { ideal: 320 }, height: { ideal: 240 }, facingMode: 'user' },
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
         audio: false
       })
       .then((stream) => {
@@ -62,58 +65,71 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     };
   }, []);
 
-  // Frame capture and OpenCV AI face analysis
+  // Frame capture and deep-learning MediaPipe + OpenCV face analysis
   const captureAndAnalyze = useCallback(async () => {
-    if (!videoRef.current || !canvasRef.current || !streamActive) return;
+    if (!videoRef.current || !canvasRef.current || !streamActive || isProcessing) return;
 
     const video = videoRef.current;
     const canvas = canvasRef.current;
     if (video.videoWidth === 0 || video.videoHeight === 0) return;
 
-    canvas.width = 320;
-    canvas.height = 240;
+    // Use 640x480 for sharp secondary face detection
+    const targetW = 640;
+    const targetH = 480;
+    canvas.width = targetW;
+    canvas.height = targetH;
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    ctx.drawImage(video, 0, 0, 320, 240);
-    const dataUrl = canvas.toDataURL('image/jpeg', 0.6);
+    ctx.drawImage(video, 0, 0, targetW, targetH);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.65);
 
+    setIsProcessing(true);
     try {
       const result = await analyzeFrame(backendUrl, dataUrl, sessionId);
       setAnalysis(result);
 
       if (result.status === 'no_face') {
         onViolation?.('NO_FACE_DETECTED', 'Candidate face is not detected in camera frame.');
-      } else if (result.status === 'multiple_faces') {
-        onViolation?.('MULTIPLE_FACES_DETECTED', `${result.face_count} faces detected in frame.`);
+      } else if (result.status === 'multiple_faces' || result.face_count > 1) {
+        onViolation?.('MULTIPLE_FACES_DETECTED', `Multiple individuals (${result.face_count} faces) detected in proctoring feed.`);
       }
     } catch {
-      // Backend analysis heartbeat
+      // Background retry
+    } finally {
+      setIsProcessing(false);
     }
-  }, [backendUrl, sessionId, streamActive, onViolation]);
+  }, [backendUrl, sessionId, streamActive, isProcessing, onViolation]);
 
-  // Periodic heartbeat analysis every 2 seconds
+  // Fast frame analysis every 800ms for responsive detection
   useEffect(() => {
     if (!streamActive) return;
-    const interval = setInterval(captureAndAnalyze, 2000);
+    const interval = setInterval(captureAndAnalyze, 800);
     return () => clearInterval(interval);
   }, [streamActive, captureAndAnalyze]);
+
+  const fw = analysis.frame_width || 640;
+  const fh = analysis.frame_height || 480;
+  const isMultiple = analysis.status === 'multiple_faces' || analysis.face_count > 1;
 
   return (
     <div
       style={{
-        border: '1px solid var(--color-border)',
+        border: isMultiple ? '2px solid #EF4444' : '1px solid var(--color-border)',
         borderRadius: 'var(--radius-md)',
         backgroundColor: 'var(--color-surface)',
         overflow: 'hidden',
-        boxShadow: '0 2px 8px rgba(0,0,0,0.06)'
+        boxShadow: isMultiple
+          ? '0 0 16px rgba(239, 68, 68, 0.45)'
+          : '0 2px 8px rgba(0,0,0,0.06)',
+        transition: 'all 0.2s ease'
       }}
     >
       <div
         style={{
           padding: '8px 12px',
-          backgroundColor: 'var(--color-surface-muted)',
-          borderBottom: '1px solid var(--color-border)',
+          backgroundColor: isMultiple ? '#FEF2F2' : 'var(--color-surface-muted)',
+          borderBottom: isMultiple ? '1px solid #FCA5A5' : '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
@@ -121,27 +137,40 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8125rem', fontWeight: 600 }}>
           <Camera size={14} className="card-icon" />
-          <span>Live Proctoring Feed</span>
+          <span>Live Proctoring AI</span>
         </div>
 
-        {streamActive && analysis.status === 'verified' && (
-          <span className="status-badge connected" style={{ padding: '2px 6px', fontSize: '0.75rem' }}>
-            <CheckCircle size={12} /> Verified
+        {streamActive && !isMultiple && analysis.status === 'verified' && (
+          <span className="status-badge connected" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+            <CheckCircle size={12} /> 1 Face Verified
           </span>
         )}
         {streamActive && analysis.status === 'no_face' && (
-          <span className="status-badge disconnected" style={{ padding: '2px 6px', fontSize: '0.75rem' }}>
-            <AlertTriangle size={12} /> No Face
+          <span className="status-badge disconnected" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
+            <AlertTriangle size={12} /> No Face Detected
           </span>
         )}
-        {streamActive && analysis.status === 'multiple_faces' && (
-          <span className="status-badge disconnected" style={{ padding: '2px 6px', fontSize: '0.75rem' }}>
-            <Users size={12} /> {analysis.face_count} Faces
+        {streamActive && isMultiple && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#DC2626',
+              color: '#FFFFFF',
+              padding: '3px 8px',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              fontWeight: 700,
+              animation: 'pulse 1s infinite'
+            }}
+          >
+            <Users size={12} /> {analysis.face_count} FACES DETECTED
           </span>
         )}
       </div>
 
-      <div style={{ position: 'relative', width: '100%', height: compact ? '160px' : '220px', backgroundColor: '#1A1C1E' }}>
+      <div style={{ position: 'relative', width: '100%', height: compact ? '180px' : '230px', backgroundColor: '#111827' }}>
         {cameraError ? (
           <div
             style={{
@@ -172,40 +201,52 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                 transform: 'scaleX(-1)' // Mirror for natural candidate view
               }}
             />
+
             {/* AI Face Detection Bounding Boxes */}
-            {analysis.bounding_boxes.map((box, i) => (
-              <div
-                key={i}
-                style={{
-                  position: 'absolute',
-                  border: analysis.status === 'multiple_faces' ? '2px solid #EF4444' : '2px solid #10B981',
-                  borderRadius: '4px',
-                  // Map coordinates from 320x240 to CSS percent
-                  left: `${100 - ((box.x + box.width) / 320) * 100}%`, // Mirrored
-                  top: `${(box.y / 240) * 100}%`,
-                  width: `${(box.width / 320) * 100}%`,
-                  height: `${(box.height / 240) * 100}%`,
-                  pointerEvents: 'none',
-                  boxShadow: '0 0 8px rgba(16, 185, 129, 0.4)'
-                }}
-              >
+            {analysis.bounding_boxes.map((box, i) => {
+              // Convert to mirrored percentages
+              const leftPct = (1 - (box.x + box.width) / fw) * 100;
+              const topPct = (box.y / fh) * 100;
+              const widthPct = (box.width / fw) * 100;
+              const heightPct = (box.height / fh) * 100;
+
+              const isFirst = i === 0;
+              const boxColor = isMultiple ? '#EF4444' : '#10B981';
+
+              return (
                 <div
+                  key={i}
                   style={{
                     position: 'absolute',
-                    top: '-18px',
-                    left: '0',
-                    backgroundColor: analysis.status === 'multiple_faces' ? '#EF4444' : '#10B981',
-                    color: '#FFF',
-                    fontSize: '10px',
-                    padding: '1px 4px',
-                    borderRadius: '2px',
-                    fontWeight: 600
+                    border: `2px solid ${boxColor}`,
+                    borderRadius: '6px',
+                    left: `${Math.max(0, leftPct)}%`,
+                    top: `${Math.max(0, topPct)}%`,
+                    width: `${widthPct}%`,
+                    height: `${heightPct}%`,
+                    pointerEvents: 'none',
+                    boxShadow: `0 0 10px ${boxColor}`
                   }}
                 >
-                  Face #{i + 1}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '-20px',
+                      left: '0',
+                      backgroundColor: boxColor,
+                      color: '#FFF',
+                      fontSize: '10px',
+                      padding: '2px 6px',
+                      borderRadius: '3px',
+                      fontWeight: 700,
+                      whiteSpace: 'nowrap'
+                    }}
+                  >
+                    {isMultiple ? (isFirst ? 'Face #1 (Candidate)' : `Face #${i + 1} (Unauthorized)`) : 'Candidate Verified'}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </>
         )}
 
@@ -213,9 +254,24 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         <canvas ref={canvasRef} style={{ display: 'none' }} />
       </div>
 
+      {isMultiple && (
+        <div
+          style={{
+            backgroundColor: '#DC2626',
+            color: '#FFFFFF',
+            padding: '6px 12px',
+            fontSize: '0.75rem',
+            fontWeight: 600,
+            textAlign: 'center'
+          }}
+        >
+          Warning: Multiple people detected in view ({analysis.face_count} faces).
+        </div>
+      )}
+
       <div style={{ padding: '6px 12px', fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
-        <span>OpenCV AI Vision</span>
-        <span>Confidence: {Math.round((analysis.confidence || 0) * 100)}%</span>
+        <span>MediaPipe BlazeFace + OpenCV</span>
+        <span>Faces: <strong>{analysis.face_count}</strong> ({Math.round((analysis.confidence || 0) * 100)}%)</span>
       </div>
     </div>
   );
