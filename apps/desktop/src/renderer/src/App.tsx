@@ -45,6 +45,8 @@ export const App: React.FC = () => {
   const [mode, setMode] = useState<AppMode>('status');
   const [candidateName, setCandidateName] = useState<string>('Parv Mishra');
   const [candidateId, setCandidateId] = useState<string>('CAND-2026-001');
+  const [candidateFaceId, setCandidateFaceId] = useState<string>('');
+  const [candidateFaceSig, setCandidateFaceSig] = useState<string>('');
   const [activeSession, setActiveSession] = useState<CandidateSession | null>(null);
   const [submissionResult, setSubmissionResult] = useState<SubmitSessionResult | null>(null);
   const [isStartingExam, setIsStartingExam] = useState<boolean>(false);
@@ -125,9 +127,11 @@ export const App: React.FC = () => {
   }, [backendUrl, checkConnectivity]);
 
   // Stage 1: Candidate inputs details -> Moves to Rules
-  const handleProceedToRules = (name: string, id: string) => {
+  const handleProceedToRules = (name: string, id: string, faceId?: string, faceSig?: string) => {
     setCandidateName(name);
     setCandidateId(id);
+    if (faceId) setCandidateFaceId(faceId);
+    if (faceSig) setCandidateFaceSig(faceSig);
     setMode('rules');
   };
 
@@ -136,7 +140,14 @@ export const App: React.FC = () => {
     if (exams.length === 0) return;
     setIsStartingExam(true);
     try {
-      const session = await createSession(backendUrl, exams[0].id, candidateName, candidateId);
+      const session = await createSession(
+        backendUrl,
+        exams[0].id,
+        candidateName,
+        candidateId,
+        candidateFaceId,
+        candidateFaceSig
+      );
       setActiveSession(session);
 
       // Trigger mandatory Electron fullscreen & Kiosk lockdown

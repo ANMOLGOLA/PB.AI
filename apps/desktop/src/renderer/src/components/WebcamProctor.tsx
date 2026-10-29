@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
-import { Camera, AlertTriangle, Users, Eye, EyeOff } from 'lucide-react';
+import { Camera, AlertTriangle, Users, Eye, EyeOff, UserX } from 'lucide-react';
 import { analyzeFrame } from '../api/client';
 import { AnalyzeFrameResult } from '../api/types';
 
@@ -21,6 +21,13 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   const [streamActive, setStreamActive] = useState<boolean>(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+
+  // Consecutive anomaly frame counters to prevent false positive flickering
+  const gazeAwayCountRef = useRef<number>(0);
+  const noFaceCountRef = useRef<number>(0);
+  const mismatchCountRef = useRef<number>(0);
+  const earpieceCountRef = useRef<number>(0);
+
   const [analysis, setAnalysis] = useState<AnalyzeFrameResult>({
     face_detected: true,
     face_count: 1,
@@ -30,7 +37,11 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     gaze_direction: 'CENTER',
     looking_at_screen: true,
     eyes: [],
+    ears: [],
     eyewear_detected: false,
+    earpiece_detected: false,
+    face_id_match: true,
+    face_id_similarity: 1.0,
     frame_width: 640,
     frame_height: 480
   });
@@ -92,13 +103,57 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       const result = await analyzeFrame(backendUrl, dataUrl, sessionId);
       setAnalysis(result);
 
-      if (result.status === 'no_face') {
-        onViolation?.('NO_FACE_DETECTED', 'Candidate face is not detected in camera frame.');
-      } else if (result.status === 'multiple_faces' || result.face_count > 1) {
+      // 1. No Face Check (Requires 3 consecutive frames ~2.4s)
+      if (result.status === 'no_face' || result.face_count === 0) {
+        noFaceCountRef.current += 1;
+        if (noFaceCountRef.current >= 3) {
+          onViolation?.('NO_FACE_DETECTED', 'Candidate face is not detected in camera frame.');
+          noFaceCountRef.current = 0;
+        }
+      } else {
+        noFaceCountRef.current = 0;
+      }
+
+      // 2. Multiple Faces Check (Immediate trigger)
+      if (result.status === 'multiple_faces' || result.face_count > 1) {
         onViolation?.('MULTIPLE_FACES_DETECTED', `Multiple individuals (${result.face_count} faces) detected in proctoring feed.`);
-      } else if (!result.looking_at_screen && result.face_count === 1) {
-        onViolation?.('GAZE_AWAY_FROM_SCREEN', `Candidate looking away from screen (${result.gaze_direction}).`);
-      } else if (result.eyewear_detected) {
+      }
+
+      // 3. Eye Gaze Tracking (Dampened sensitivity: Requires 4 consecutive frames ~3.2s sustained gaze away)
+      if (!result.looking_at_screen && result.face_count === 1) {
+        gazeAwayCountRef.current += 1;
+        if (gazeAwayCountRef.current >= 4) {
+          onViolation?.('GAZE_AWAY_FROM_SCREEN', `Candidate looking away from screen (${result.gaze_direction}).`);
+          gazeAwayCountRef.current = 0; // Reset after alert
+        }
+      } else if (result.looking_at_screen) {
+        gazeAwayCountRef.current = 0;
+      }
+
+      // 4. Face ID Biometric Anti-Impersonation Check (Requires 2 consecutive frames ~1.6s)
+      if (result.status === 'face_mismatch' || result.face_id_match === false) {
+        mismatchCountRef.current += 1;
+        if (mismatchCountRef.current >= 2) {
+          onViolation?.('FACE_MISMATCH_IMPERSONATION', 'Biometric Face ID mismatch: Active person does not match enrolled candidate.');
+          mismatchCountRef.current = 0;
+        }
+      } else {
+        mismatchCountRef.current = 0;
+      }
+
+      // 5. Earpiece / Audio Device Check (Requires 2 consecutive frames ~1.6s)
+      if (result.earpiece_detected) {
+        earpieceCountRef.current += 1;
+        if (earpieceCountRef.current >= 2) {
+          onViolation?.('EARPIECE_DETECTED', 'Concealed audio earpiece or Bluetooth earbud detected in ear region.');
+          earpieceCountRef.current = 0;
+        }
+      } else {
+        earpieceCountRef.current = 0;
+      }
+
+      // 6. Eyewear Check
+      if (result.eyewear_detected) {
         onViolation?.('RESTRICTED_EYEWEAR_DETECTED', 'Tinted eyewear or sunglasses detected covering eyes.');
       }
     } catch {
@@ -108,7 +163,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
     }
   }, [backendUrl, sessionId, streamActive, isProcessing, onViolation]);
 
-  // Fast frame analysis every 800ms
+  // Frame analysis loop every 800ms
   useEffect(() => {
     if (!streamActive) return;
     const interval = setInterval(captureAndAnalyze, 800);
@@ -119,18 +174,23 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
   const fh = analysis.frame_height || 480;
   const isMultiple = analysis.status === 'multiple_faces' || analysis.face_count > 1;
   const isGazeAway = !analysis.looking_at_screen && analysis.face_count === 1;
+  const isMismatch = analysis.status === 'face_mismatch' || analysis.face_id_match === false;
 
   return (
     <div
       style={{
-        border: isMultiple || isGazeAway || analysis.eyewear_detected
+        border: isMultiple || isMismatch || analysis.earpiece_detected
           ? '2px solid #EF4444'
+          : isGazeAway
+          ? '2px solid #F59E0B'
           : '1px solid var(--color-border)',
         borderRadius: 'var(--radius-md)',
         backgroundColor: 'var(--color-surface)',
         overflow: 'hidden',
-        boxShadow: isMultiple || isGazeAway
+        boxShadow: isMultiple || isMismatch
           ? '0 0 16px rgba(239, 68, 68, 0.45)'
+          : isGazeAway
+          ? '0 0 12px rgba(245, 158, 11, 0.35)'
           : '0 2px 8px rgba(0,0,0,0.06)',
         transition: 'all 0.2s ease'
       }}
@@ -138,8 +198,8 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
       <div
         style={{
           padding: '8px 12px',
-          backgroundColor: isMultiple || isGazeAway ? '#FEF2F2' : 'var(--color-surface-muted)',
-          borderBottom: isMultiple || isGazeAway ? '1px solid #FCA5A5' : '1px solid var(--color-border)',
+          backgroundColor: isMultiple || isMismatch ? '#FEF2F2' : isGazeAway ? '#FFFBEB' : 'var(--color-surface-muted)',
+          borderBottom: isMultiple || isMismatch ? '1px solid #FCA5A5' : isGazeAway ? '1px solid #FCD34D' : '1px solid var(--color-border)',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between'
@@ -150,12 +210,12 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
           <span>Where U Elevate AI Proctor</span>
         </div>
 
-        {streamActive && !isMultiple && analysis.looking_at_screen && analysis.status === 'verified' && (
+        {streamActive && !isMultiple && !isMismatch && analysis.looking_at_screen && analysis.status === 'verified' && (
           <span className="status-badge connected" style={{ padding: '2px 8px', fontSize: '0.75rem' }}>
             <Eye size={12} /> Eyes on Screen
           </span>
         )}
-        {streamActive && isGazeAway && (
+        {streamActive && isGazeAway && !isMultiple && !isMismatch && (
           <span
             style={{
               display: 'inline-flex',
@@ -170,6 +230,23 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
             }}
           >
             <EyeOff size={12} /> Gaze: {analysis.gaze_direction}
+          </span>
+        )}
+        {streamActive && isMismatch && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '4px',
+              backgroundColor: '#DC2626',
+              color: '#FFFFFF',
+              padding: '2px 8px',
+              borderRadius: '4px',
+              fontSize: '0.75rem',
+              fontWeight: 700
+            }}
+          >
+            <UserX size={12} /> Face ID Mismatch
           </span>
         )}
         {streamActive && isMultiple && (
@@ -231,7 +308,7 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
               const heightPct = (box.height / fh) * 100;
 
               const isFirst = i === 0;
-              const boxColor = isMultiple ? '#EF4444' : isGazeAway ? '#F59E0B' : '#10B981';
+              const boxColor = isMultiple || isMismatch ? '#EF4444' : isGazeAway ? '#F59E0B' : '#10B981';
 
               return (
                 <div
@@ -262,7 +339,13 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                       whiteSpace: 'nowrap'
                     }}
                   >
-                    {isMultiple ? (isFirst ? 'Face #1 (Candidate)' : `Face #${i + 1} (Unauthorized)`) : isGazeAway ? 'Candidate (Looking Away)' : 'Candidate (Eyes on Screen)'}
+                    {isMultiple
+                      ? (isFirst ? 'Face #1 (Candidate)' : `Face #${i + 1} (Unauthorized)`)
+                      : isMismatch
+                      ? 'Unauthorized Person'
+                      : isGazeAway
+                      ? 'Candidate (Reading Away)'
+                      : 'Candidate (Verified)'}
                   </div>
                 </div>
               );
@@ -283,9 +366,32 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
                     height: '10px',
                     transform: 'translate(-50%, -50%)',
                     borderRadius: '50%',
-                    backgroundColor: analysis.looking_at_screen ? '#10B981' : '#EF4444',
+                    backgroundColor: analysis.looking_at_screen ? '#10B981' : '#F59E0B',
                     border: '2px solid #FFFFFF',
                     boxShadow: '0 0 6px #10B981',
+                    pointerEvents: 'none'
+                  }}
+                />
+              );
+            })}
+
+            {/* Real-time Ear Tracking Reticles */}
+            {analysis.ears && analysis.ears.map((ear, i) => {
+              const earLeftPct = (1 - ear.x / fw) * 100;
+              const earTopPct = (ear.y / fh) * 100;
+              return (
+                <div
+                  key={`ear-${i}`}
+                  style={{
+                    position: 'absolute',
+                    left: `${earLeftPct}%`,
+                    top: `${earTopPct}%`,
+                    width: '8px',
+                    height: '8px',
+                    transform: 'translate(-50%, -50%)',
+                    borderRadius: '50%',
+                    backgroundColor: analysis.earpiece_detected ? '#EF4444' : '#4F46E5',
+                    border: '1px solid #FFFFFF',
                     pointerEvents: 'none'
                   }}
                 />
@@ -304,9 +410,19 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
           Multiple individuals detected in view ({analysis.face_count} faces).
         </div>
       )}
-      {!isMultiple && isGazeAway && (
+      {!isMultiple && isMismatch && (
+        <div style={{ backgroundColor: '#B91C1C', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+          Biometric Impersonation Alert: Face ID mismatch with enrolled candidate.
+        </div>
+      )}
+      {!isMultiple && !isMismatch && isGazeAway && (
         <div style={{ backgroundColor: '#D97706', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
           Gaze Alert: Looking away from screen ({analysis.gaze_direction}). Please face monitor.
+        </div>
+      )}
+      {analysis.earpiece_detected && (
+        <div style={{ backgroundColor: '#B91C1C', color: '#FFFFFF', padding: '6px 12px', fontSize: '0.75rem', fontWeight: 700, textAlign: 'center' }}>
+          Earpiece Alert: Concealed audio earpiece detected. Remove all earbuds immediately.
         </div>
       )}
       {analysis.eyewear_detected && (
@@ -315,9 +431,14 @@ export const WebcamProctor: React.FC<WebcamProctorProps> = ({
         </div>
       )}
 
-      <div style={{ padding: '6px 12px', fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'flex', justifyContent: 'space-between' }}>
-        <span>Eye Gaze: <strong>{analysis.gaze_direction}</strong></span>
-        <span>Faces: <strong>{analysis.face_count}</strong></span>
+      <div style={{ padding: '6px 12px', fontSize: '0.75rem', color: 'var(--color-text-secondary)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <span>Gaze: <strong>{analysis.gaze_direction}</strong></span>
+        <span>
+          Face ID:{' '}
+          <strong style={{ color: isMismatch ? '#DC2626' : '#059669' }}>
+            {isMismatch ? 'MISMATCH' : 'MATCHED'}
+          </strong>
+        </span>
       </div>
     </div>
   );

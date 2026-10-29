@@ -18,6 +18,10 @@ class Settings:
     # SQLite Database URI
     DB_PATH: Path = Path(os.getenv("SENTINEL_DB_PATH", str(DEFAULT_DB_FILE))).resolve()
 
+    # Teacher Authorization Code for integrity lockouts
+    TEACHER_UNLOCK_CODE: str = os.getenv("SENTINEL_TEACHER_CODE", "TEACHER-UNLOCK-2026")
+    ALLOWED_TEACHER_CODES: list = ["TEACHER-UNLOCK-2026", "ELEV8-2026", "778899"]
+
     @property
     def SQLALCHEMY_DATABASE_URI(self) -> str:
         # SQLite URL with absolute path

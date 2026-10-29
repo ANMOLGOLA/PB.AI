@@ -195,12 +195,12 @@ export const ExamRulesPage: React.FC<ExamRulesPageProps> = ({
         <div className="notice-box info" style={{ marginBottom: '28px', padding: '18px' }}>
           <Lock size={22} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--color-accent)' }} />
           <div>
-            <strong style={{ fontSize: '0.9375rem' }}>Strict Anti-Escape & Anti-Overlay Lockdown Enforced</strong>
+            <strong style={{ fontSize: '0.9375rem' }}>Strict Anti-Escape & Anti-Overlay Lockdown Enforced (5-Warning Limit)</strong>
             <p style={{ fontSize: '0.8125rem', marginTop: '6px', lineHeight: 1.6 }}>
               Upon entering the assessment, Sentinel Exam enforces <strong>OS-level Kiosk lockdown</strong>.
               You cannot exit full-screen, switch windows (<code>Alt+Tab</code> blocked), open developer tools,
               or use screen capture/overlay utilities (OBS, Discord, or Game Bar overlays are blocked via hardware Content Protection).
-              Attempting to defocus the window will immediately log an audit anomaly.
+              Candidate Face ID is locked to prevent others from taking your exam. <strong>Accumulating 5 integrity warnings will revoke exam access</strong>, requiring teacher code authorization to resume.
             </p>
           </div>
         </div>

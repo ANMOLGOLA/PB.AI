@@ -3,6 +3,8 @@ import {
   PublicExam,
   CandidateSession,
   AnalyzeFrameResult,
+  PreExamScanResult,
+  TeacherUnlockResult,
   SubmitSessionResult
 } from './types';
 
@@ -39,7 +41,9 @@ export async function createSession(
   baseUrl: string,
   examId: string,
   candidateName: string,
-  candidateId: string
+  candidateId: string,
+  faceId?: string,
+  faceSignature?: string
 ): Promise<CandidateSession> {
   const url = `${baseUrl.replace(/\/$/, '')}/api/sessions`;
   const response = await fetch(url, {
@@ -48,10 +52,54 @@ export async function createSession(
     body: JSON.stringify({
       exam_id: examId,
       candidate_name: candidateName,
-      candidate_id: candidateId
+      candidate_id: candidateId,
+      face_id: faceId,
+      face_signature: faceSignature
     })
   });
   if (!response.ok) throw new Error(`Failed to create exam session: HTTP ${response.status}`);
+  return response.json();
+}
+
+/**
+ * Perform pre-exam candidate biometric identity scan and earpiece/audio device detection.
+ */
+export async function scanPreExamFaceAndEar(
+  baseUrl: string,
+  imageBase64: string,
+  candidateId?: string
+): Promise<PreExamScanResult> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/proctor/pre-exam-scan`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      image_base64: imageBase64,
+      candidate_id: candidateId
+    })
+  });
+  if (!response.ok) throw new Error(`Pre-exam biometric scan failed: HTTP ${response.status}`);
+  return response.json();
+}
+
+/**
+ * Unlock a session locked out due to reaching 5 integrity warnings using teacher code.
+ */
+export async function unlockWithTeacherCode(
+  baseUrl: string,
+  sessionId: string,
+  teacherCode: string
+): Promise<TeacherUnlockResult> {
+  const url = `${baseUrl.replace(/\/$/, '')}/api/sessions/${sessionId}/unlock`;
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ teacher_code: teacherCode })
+  });
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({}));
+    throw new Error(errorData.detail || `Teacher authorization failed: HTTP ${response.status}`);
+  }
   return response.json();
 }
 
@@ -103,7 +151,7 @@ export async function logEvent(
 }
 
 /**
- * Send webcam frame to OpenCV computer vision analyzer.
+ * Send webcam frame to OpenCV / MediaPipe proctoring analyzer.
  */
 export async function analyzeFrame(
   baseUrl: string,

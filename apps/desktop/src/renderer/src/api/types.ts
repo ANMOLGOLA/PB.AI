@@ -35,6 +35,8 @@ export interface CandidateSession {
   candidate_name: string;
   candidate_id: string;
   status: string;
+  face_id?: string;
+  is_locked?: number;
   started_at: string;
   duration_minutes: number;
 }
@@ -50,14 +52,36 @@ export interface AnalyzeFrameResult {
   face_detected: boolean;
   face_count: number;
   confidence: number;
-  status: 'verified' | 'no_face' | 'multiple_faces' | string;
+  status: 'verified' | 'no_face' | 'multiple_faces' | 'face_mismatch' | string;
   bounding_boxes: BoundingBox[];
   gaze_direction?: string;
   looking_at_screen?: boolean;
   eyes?: Array<{ x: number; y: number; name?: string }>;
+  ears?: Array<{ x: number; y: number; name?: string }>;
   eyewear_detected?: boolean;
+  earpiece_detected?: boolean;
+  face_id_match?: boolean;
+  face_id_similarity?: number;
   frame_width?: number;
   frame_height?: number;
+}
+
+export interface PreExamScanResult {
+  face_detected: boolean;
+  face_count: number;
+  face_id: string;
+  eyewear_detected: boolean;
+  earpiece_detected: boolean;
+  all_passed: boolean;
+  details: string;
+  face_signature_json?: string;
+  ear_scan?: Record<string, unknown>;
+}
+
+export interface TeacherUnlockResult {
+  unlocked: boolean;
+  session_id: string;
+  message: string;
 }
 
 export interface IntegrityEventRecord {

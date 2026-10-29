@@ -1,9 +1,10 @@
 import uuid
 import json
 from datetime import datetime, timezone
-from typing import List
+from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
+from app.config import settings
 from app.database import get_db
 from app.models import Exam, Question, ExamSession, CandidateAnswer, IntegrityEvent
 from app.schemas import (
@@ -15,6 +16,12 @@ from app.schemas import (
     EventResponse,
     AnalyzeFrameRequest,
     AnalyzeFrameResponse,
+    PreExamScanRequest,
+    PreExamScanResponse,
+    EnrollFaceRequest,
+    EnrollFaceResponse,
+    TeacherUnlockRequest,
+    TeacherUnlockResponse,
     SubmitSessionResponse
 )
 from app.proctoring import analyze_camera_frame
@@ -35,6 +42,9 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         exam_id=exam.id,
         candidate_name=payload.candidate_name,
         candidate_id=payload.candidate_id,
+        face_id=payload.face_id,
+        face_signature=payload.face_signature,
+        is_locked=0,
         status="active",
         started_at=datetime.now(timezone.utc)
     )
@@ -48,7 +58,12 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         source="system",
         severity="info",
         confidence=1.0,
-        metadata_json=json.dumps({"candidate_name": payload.candidate_name, "exam_title": exam.title})
+        metadata_json=json.dumps({
+            "candidate_name": payload.candidate_name,
+            "candidate_id": payload.candidate_id,
+            "exam_title": exam.title,
+            "face_id": payload.face_id
+        })
     )
     db.add(start_event)
     db.commit()
@@ -60,8 +75,162 @@ def create_session(payload: CreateSessionRequest, db: Session = Depends(get_db))
         candidate_name=exam_session.candidate_name,
         candidate_id=exam_session.candidate_id,
         status=exam_session.status,
+        face_id=exam_session.face_id,
+        is_locked=exam_session.is_locked,
         started_at=exam_session.started_at,
         duration_minutes=exam.duration_minutes
+    )
+
+
+@router.post("/proctor/pre-exam-scan", response_model=PreExamScanResponse)
+def pre_exam_scan(payload: PreExamScanRequest):
+    """
+    Performs pre-exam candidate biometric identity enrollment and audio hardware inspection.
+    Scans for:
+      1. Centered single face for Face ID biometric token generation.
+      2. Concealed Bluetooth earpieces, AirPods, or audio devices in ear canals.
+      3. Prohibited dark sunglasses / tinted eyewear.
+    """
+    analysis = analyze_camera_frame(payload.image_base64)
+    face_count = analysis.get("face_count", 0)
+    eyewear_detected = analysis.get("eyewear_detected", False)
+    ear_scan = analysis.get("ear_scan", {})
+    earpiece_detected = analysis.get("earpiece_detected", False)
+
+    face_sig = analysis.get("face_signature") or {}
+    face_id = face_sig.get("face_id", f"FID-{uuid.uuid4().hex[:8].upper()}")
+
+    issues = []
+    if face_count == 0:
+        issues.append("No face detected. Please position face clearly in camera.")
+    elif face_count > 1:
+        issues.append("Multiple faces detected in frame.")
+    if eyewear_detected:
+        issues.append("Tinted eyewear or sunglasses detected. Please remove them.")
+    if earpiece_detected:
+        issues.append("Concealed earpiece or audio device detected near ear. Please remove all earbuds.")
+
+    all_passed = len(issues) == 0
+    details = "Biometric Face ID generated and earpiece scan clear." if all_passed else " | ".join(issues)
+
+    return PreExamScanResponse(
+        face_detected=face_count > 0,
+        face_count=face_count,
+        face_id=face_id,
+        eyewear_detected=eyewear_detected,
+        earpiece_detected=earpiece_detected,
+        all_passed=all_passed,
+        details=details,
+        face_signature_json=json.dumps(face_sig) if face_sig else None,
+        ear_scan=ear_scan
+    )
+
+
+@router.post("/sessions/{session_id}/enroll-face", response_model=EnrollFaceResponse)
+def enroll_candidate_face(
+    session_id: str,
+    payload: EnrollFaceRequest,
+    db: Session = Depends(get_db)
+):
+    """Enroll candidate's unique biometric Face ID signature into their active session."""
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    analysis = analyze_camera_frame(payload.image_base64)
+    if not analysis["face_detected"] or analysis["face_count"] != 1:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Single clear face required for Face ID enrollment (detected {analysis['face_count']})"
+        )
+
+    face_sig = analysis.get("face_signature") or {}
+    face_id = face_sig.get("face_id", f"FID-{uuid.uuid4().hex[:8].upper()}")
+
+    exam_session.face_id = face_id
+    exam_session.face_signature = json.dumps(face_sig)
+
+    enroll_event = IntegrityEvent(
+        id=str(uuid.uuid4()),
+        session_id=session_id,
+        event_type="FACE_ID_ENROLLED",
+        source="mediapipe_biometrics",
+        severity="info",
+        confidence=0.99,
+        metadata_json=json.dumps({
+            "face_id": face_id,
+            "candidate_name": exam_session.candidate_name,
+            "status": "enrolled"
+        })
+    )
+    db.add(enroll_event)
+    db.commit()
+
+    return EnrollFaceResponse(
+        face_id=face_id,
+        status="enrolled",
+        confidence=0.99,
+        message="Candidate Face ID successfully enrolled for anti-impersonation monitoring."
+    )
+
+
+@router.post("/sessions/{session_id}/unlock", response_model=TeacherUnlockResponse)
+def unlock_session(
+    session_id: str,
+    payload: TeacherUnlockRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Teacher/Proctor override authorization.
+    Unlocks an assessment session locked out after 5 integrity warnings.
+    Accepts teacher authorization code (e.g., TEACHER-UNLOCK-2026, ELEV8-2026).
+    """
+    exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
+    if not exam_session:
+        raise HTTPException(status_code=404, detail="Session not found")
+
+    code_entered = payload.teacher_code.strip()
+    valid_codes = [c.upper() for c in settings.ALLOWED_TEACHER_CODES]
+
+    if code_entered.upper() not in valid_codes and code_entered != settings.TEACHER_UNLOCK_CODE:
+        # Log unauthorized attempt
+        fail_event = IntegrityEvent(
+            id=str(uuid.uuid4()),
+            session_id=session_id,
+            event_type="UNAUTHORIZED_UNLOCK_ATTEMPT",
+            source="teacher_lockout_guard",
+            severity="high",
+            confidence=1.0,
+            metadata_json=json.dumps({"attempted_code": code_entered})
+        )
+        db.add(fail_event)
+        db.commit()
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid teacher authorization code. Access denied."
+        )
+
+    # Unlock session
+    exam_session.is_locked = 0
+    unlock_event = IntegrityEvent(
+        id=str(uuid.uuid4()),
+        session_id=session_id,
+        event_type="TEACHER_UNLOCK_OVERRIDE",
+        source="teacher_lockout_guard",
+        severity="info",
+        confidence=1.0,
+        metadata_json=json.dumps({
+            "authorized_by": "TEACHER_OVERRIDE",
+            "message": "Teacher provided valid authorization code; candidate assessment access restored."
+        })
+    )
+    db.add(unlock_event)
+    db.commit()
+
+    return TeacherUnlockResponse(
+        unlocked=True,
+        session_id=session_id,
+        message="Assessment access successfully restored by teacher authorization."
     )
 
 
@@ -76,6 +245,12 @@ def save_answer(
     exam_session = db.query(ExamSession).filter(ExamSession.id == session_id).first()
     if not exam_session or exam_session.status != "active":
         raise HTTPException(status_code=400, detail="Active exam session not found")
+
+    if exam_session.is_locked:
+        raise HTTPException(
+            status_code=status.HTTP_423_LOCKED,
+            detail="Exam session locked due to integrity violations. Contact proctor."
+        )
 
     # Check if answer record exists
     answer = db.query(CandidateAnswer).filter(
@@ -169,75 +344,99 @@ def get_session_events(session_id: str, db: Session = Depends(get_db)):
 def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
     """
     Real-time Computer Vision proctoring analysis.
-    Uses OpenCV to inspect candidate webcam frames for face presence and count.
-    Automatically logs an anomaly event if session_id is provided and anomaly detected.
+    Uses MediaPipe deep-learning BlazeFace to inspect candidate webcam frames for:
+      - Face presence & count
+      - Gaze orientation (calibrated for natural reading)
+      - Dark/tinted sunglasses check
+      - Concealed audio earpiece check
+      - Biometric Face ID anti-impersonation verification
     """
-    analysis = analyze_camera_frame(payload.image_base64)
-
-    # If linked to an active session, auto-log anomalous signals
+    enrolled_sig = None
+    exam_session = None
     if payload.session_id:
         exam_session = db.query(ExamSession).filter(ExamSession.id == payload.session_id).first()
-        if exam_session and exam_session.status == "active":
-            if analysis["status"] == "no_face":
-                event = IntegrityEvent(
-                    id=str(uuid.uuid4()),
-                    session_id=payload.session_id,
-                    event_type="NO_FACE_DETECTED",
-                    occurred_at=datetime.now(timezone.utc),
-                    source="opencv_cv_engine",
-                    severity="high",
-                    confidence=analysis["confidence"],
-                    metadata_json=json.dumps({"reason": "Candidate not visible in webcam frame"})
-                )
-                db.add(event)
-                db.commit()
-            elif analysis["status"] == "multiple_faces":
-                event = IntegrityEvent(
-                    id=str(uuid.uuid4()),
-                    session_id=payload.session_id,
-                    event_type="MULTIPLE_FACES_DETECTED",
-                    occurred_at=datetime.now(timezone.utc),
-                    source="opencv_cv_engine",
-                    severity="critical",
-                    confidence=analysis["confidence"],
-                    metadata_json=json.dumps({
-                        "face_count": analysis["face_count"],
-                        "reason": "Multiple individuals detected in proctoring feed"
-                    })
-                )
-                db.add(event)
-                db.commit()
-            elif not analysis.get("looking_at_screen", True) and analysis.get("face_count") == 1:
-                event = IntegrityEvent(
-                    id=str(uuid.uuid4()),
-                    session_id=payload.session_id,
-                    event_type="GAZE_AWAY_FROM_SCREEN",
-                    occurred_at=datetime.now(timezone.utc),
-                    source="opencv_gaze_tracker",
-                    severity="medium",
-                    confidence=0.88,
-                    metadata_json=json.dumps({
-                        "gaze_direction": analysis.get("gaze_direction", "LOOKING_AWAY"),
-                        "reason": "Candidate eyes/head directed away from the assessment monitor"
-                    })
-                )
-                db.add(event)
-                db.commit()
-            elif analysis.get("eyewear_detected", False):
-                event = IntegrityEvent(
-                    id=str(uuid.uuid4()),
-                    session_id=payload.session_id,
-                    event_type="RESTRICTED_EYEWEAR_DETECTED",
-                    occurred_at=datetime.now(timezone.utc),
-                    source="opencv_vision_analyzer",
-                    severity="high",
-                    confidence=0.90,
-                    metadata_json=json.dumps({
-                        "reason": "Tinted or dark eyewear detected obscuring candidate eye gaze"
-                    })
-                )
-                db.add(event)
-                db.commit()
+        if exam_session and exam_session.face_signature:
+            enrolled_sig = exam_session.face_signature
+
+    analysis = analyze_camera_frame(payload.image_base64, enrolled_signature=enrolled_sig)
+
+    # Auto-log anomalous signals if linked to active session
+    if exam_session and exam_session.status == "active":
+        if analysis["status"] == "no_face":
+            event = IntegrityEvent(
+                id=str(uuid.uuid4()),
+                session_id=payload.session_id,
+                event_type="NO_FACE_DETECTED",
+                occurred_at=datetime.now(timezone.utc),
+                source="opencv_cv_engine",
+                severity="high",
+                confidence=analysis["confidence"],
+                metadata_json=json.dumps({"reason": "Candidate not visible in webcam frame"})
+            )
+            db.add(event)
+            db.commit()
+        elif analysis["status"] == "multiple_faces":
+            event = IntegrityEvent(
+                id=str(uuid.uuid4()),
+                session_id=payload.session_id,
+                event_type="MULTIPLE_FACES_DETECTED",
+                occurred_at=datetime.now(timezone.utc),
+                source="opencv_cv_engine",
+                severity="critical",
+                confidence=analysis["confidence"],
+                metadata_json=json.dumps({
+                    "face_count": analysis["face_count"],
+                    "reason": "Multiple individuals detected in proctoring feed"
+                })
+            )
+            db.add(event)
+            db.commit()
+        elif analysis["status"] == "face_mismatch" or not analysis.get("face_id_match", True):
+            event = IntegrityEvent(
+                id=str(uuid.uuid4()),
+                session_id=payload.session_id,
+                event_type="FACE_MISMATCH_IMPERSONATION",
+                occurred_at=datetime.now(timezone.utc),
+                source="mediapipe_biometrics",
+                severity="critical",
+                confidence=0.92,
+                metadata_json=json.dumps({
+                    "reason": "Active candidate face does not match enrolled Face ID",
+                    "similarity": analysis.get("face_id_similarity", 0.0)
+                })
+            )
+            db.add(event)
+            db.commit()
+        elif analysis.get("earpiece_detected", False):
+            event = IntegrityEvent(
+                id=str(uuid.uuid4()),
+                session_id=payload.session_id,
+                event_type="EARPIECE_DETECTED",
+                occurred_at=datetime.now(timezone.utc),
+                source="auricular_vision_scanner",
+                severity="high",
+                confidence=0.94,
+                metadata_json=json.dumps({
+                    "reason": "Concealed earpiece or audio device detected in ear region"
+                })
+            )
+            db.add(event)
+            db.commit()
+        elif analysis.get("eyewear_detected", False):
+            event = IntegrityEvent(
+                id=str(uuid.uuid4()),
+                session_id=payload.session_id,
+                event_type="RESTRICTED_EYEWEAR_DETECTED",
+                occurred_at=datetime.now(timezone.utc),
+                source="opencv_vision_analyzer",
+                severity="high",
+                confidence=0.90,
+                metadata_json=json.dumps({
+                    "reason": "Tinted or dark eyewear detected obscuring candidate eye gaze"
+                })
+            )
+            db.add(event)
+            db.commit()
 
     return AnalyzeFrameResponse(
         face_detected=analysis["face_detected"],
@@ -248,7 +447,11 @@ def analyze_frame(payload: AnalyzeFrameRequest, db: Session = Depends(get_db)):
         gaze_direction=analysis.get("gaze_direction", "CENTER"),
         looking_at_screen=analysis.get("looking_at_screen", True),
         eyes=analysis.get("eyes", []),
+        ears=analysis.get("ears", []),
         eyewear_detected=analysis.get("eyewear_detected", False),
+        earpiece_detected=analysis.get("earpiece_detected", False),
+        face_id_match=analysis.get("face_id_match", True),
+        face_id_similarity=analysis.get("face_id_similarity", 1.0),
         frame_width=analysis.get("frame_width", 640),
         frame_height=analysis.get("frame_height", 480)
     )

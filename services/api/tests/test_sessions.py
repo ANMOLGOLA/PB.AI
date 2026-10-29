@@ -63,3 +63,47 @@ def test_session_lifecycle_and_proctoring(client: TestClient, db_session: Sessio
     assert "score" in result
     assert "events" in result
     assert len(result["events"]) >= 3  # SESSION_STARTED, WINDOW_BLUR, NO_FACE_DETECTED, SESSION_SUBMITTED
+
+
+def test_pre_exam_scan_and_teacher_unlock(client: TestClient, db_session: Session):
+    """Test pre-exam scan endpoint and teacher unlock security overrides."""
+    # 1. Pre-exam scan on dummy frame
+    dummy_b64 = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII="
+    scan_resp = client.post("/api/proctor/pre-exam-scan", json={
+        "image_base64": dummy_b64,
+        "candidate_id": "CAND-999"
+    })
+    assert scan_resp.status_code == 200
+    scan_data = scan_resp.json()
+    assert "face_id" in scan_data
+    assert "earpiece_detected" in scan_data
+
+    # 2. Create session with Face ID
+    sess_resp = client.post("/api/sessions", json={
+        "exam_id": DEMO_EXAM_ID,
+        "candidate_name": "Alice Smith",
+        "candidate_id": "CAND-ALICE-1",
+        "face_id": scan_data["face_id"]
+    })
+    assert sess_resp.status_code == 201
+    session_id = sess_resp.json()["id"]
+
+    # 3. Test Teacher Unlock with INVALID code
+    fail_unlock = client.post(f"/api/sessions/{session_id}/unlock", json={
+        "teacher_code": "INVALID_CODE_123"
+    })
+    assert fail_unlock.status_code == 403
+
+    # 4. Test Teacher Unlock with VALID code
+    pass_unlock = client.post(f"/api/sessions/{session_id}/unlock", json={
+        "teacher_code": "TEACHER-UNLOCK-2026"
+    })
+    assert pass_unlock.status_code == 200
+    assert pass_unlock.json()["unlocked"] is True
+
+    # 5. Test Teacher Unlock with secondary VALID code
+    pass_unlock2 = client.post(f"/api/sessions/{session_id}/unlock", json={
+        "teacher_code": "ELEV8-2026"
+    })
+    assert pass_unlock2.status_code == 200
+    assert pass_unlock2.json()["unlocked"] is True

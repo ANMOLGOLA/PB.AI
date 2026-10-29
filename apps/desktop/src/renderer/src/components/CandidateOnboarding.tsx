@@ -1,12 +1,23 @@
-import React, { useState } from 'react';
-import { Shield, ArrowRight, AlertCircle, Sparkles } from 'lucide-react';
-import { WebcamProctor } from './WebcamProctor';
-import { PublicExam } from '../api/types';
+import React, { useState, useRef, useCallback } from 'react';
+import {
+  Shield,
+  ArrowRight,
+  AlertCircle,
+  Sparkles,
+  Camera,
+  CheckCircle2,
+  AlertTriangle,
+  Headphones,
+  Eye,
+  RefreshCw
+} from 'lucide-react';
+import { scanPreExamFaceAndEar } from '../api/client';
+import { PublicExam, PreExamScanResult } from '../api/types';
 
 interface CandidateOnboardingProps {
   exam: PublicExam;
   backendUrl: string;
-  onProceedToRules: (candidateName: string, candidateId: string) => void;
+  onProceedToRules: (candidateName: string, candidateId: string, faceId?: string, faceSig?: string) => void;
   isLoading: boolean;
 }
 
@@ -19,14 +30,88 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
   const [candidateName, setCandidateName] = useState('Parv Mishra');
   const [candidateId, setCandidateId] = useState('CAND-2026-001');
 
+  // Pre-exam biometric & earpiece scan states
+  const [isScanning, setIsScanning] = useState<boolean>(false);
+  const [scanResult, setScanResult] = useState<PreExamScanResult | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
+
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
+  const [cameraActive, setCameraActive] = useState<boolean>(false);
+
+  // Initialize camera for self-check & scan
+  React.useEffect(() => {
+    let currentStream: MediaStream | null = null;
+    navigator.mediaDevices?.getUserMedia({ video: { width: 640, height: 480 } })
+      .then((stream) => {
+        currentStream = stream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.play();
+          setCameraActive(true);
+        }
+      })
+      .catch((err) => {
+        console.warn('Camera initialization error:', err);
+        setScanError('Unable to access camera hardware. Please check webcam permissions.');
+      });
+
+    return () => {
+      if (currentStream) {
+        currentStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, []);
+
+  // Perform Pre-Exam Face & Earpiece Scan
+  const handlePerformScan = useCallback(async () => {
+    if (!videoRef.current || !canvasRef.current || !cameraActive) return;
+    const video = videoRef.current;
+    const canvas = canvasRef.current;
+    if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+    canvas.width = 640;
+    canvas.height = 480;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    ctx.drawImage(video, 0, 0, 640, 480);
+    const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+
+    setIsScanning(true);
+    setScanError(null);
+    try {
+      const res = await scanPreExamFaceAndEar(backendUrl, dataUrl, candidateId);
+      setScanResult(res);
+      if (!res.all_passed) {
+        setScanError(res.details);
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setScanError(err.message);
+      } else {
+        setScanError('Failed to complete pre-exam scan');
+      }
+    } finally {
+      setIsScanning(false);
+    }
+  }, [backendUrl, candidateId, cameraActive]);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!candidateName.trim() || !candidateId.trim()) return;
-    onProceedToRules(candidateName.trim(), candidateId.trim());
+    onProceedToRules(
+      candidateName.trim(),
+      candidateId.trim(),
+      scanResult?.face_id,
+      scanResult?.face_signature_json
+    );
   };
 
+  const isScanPassed = scanResult && scanResult.all_passed;
+
   return (
-    <div style={{ maxWidth: '880px', margin: '0 auto', padding: '24px 0' }}>
+    <div style={{ maxWidth: '940px', margin: '0 auto', padding: '24px 0' }}>
       <div className="card" style={{ padding: '36px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '14px', marginBottom: '20px' }}>
           <div className="brand-icon-box" style={{ width: '48px', height: '48px' }}>
@@ -38,7 +123,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
                 Where U Elevate Assessment Center
               </span>
             </div>
-            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Candidate Verification & Self-Check</h2>
+            <h2 style={{ fontSize: '1.4rem', fontWeight: 700 }}>Biometric Face ID & Earpiece Verification</h2>
             <p style={{ color: 'var(--color-text-secondary)', fontSize: '0.875rem' }}>
               {exam.title} &bull; {exam.total_questions} Questions &bull; {exam.duration_minutes} Minutes
             </p>
@@ -47,6 +132,7 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
 
         <form onSubmit={handleSubmit}>
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '28px', margin: '24px 0' }}>
+            {/* Left Column: Candidate Info & Protections */}
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px' }}>
                 Candidate Full Name
@@ -89,36 +175,202 @@ export const CandidateOnboarding: React.FC<CandidateOnboardingProps> = ({
               <div className="notice-box info" style={{ marginTop: '20px' }}>
                 <Shield size={18} style={{ flexShrink: 0, marginTop: '2px', color: 'var(--color-accent)' }} />
                 <div style={{ fontSize: '0.8125rem', lineHeight: 1.5 }}>
-                  <strong>Proctoring Protection Active:</strong>
+                  <strong>Security & Integrity Protections:</strong>
                   <ul style={{ paddingLeft: '16px', marginTop: '6px' }}>
-                    <li>Where U Elevate eye tracking verifies screen focus.</li>
-                    <li>OS-level Kiosk locks window from Alt+Tab and overlays.</li>
-                    <li>Hardware Content Protection blocks screen sharing/OBS.</li>
+                    <li><strong>Candidate Face ID:</strong> Locks exam to your biometric identity so no other person can take it.</li>
+                    <li><strong>Concealed Earpiece Scan:</strong> Inspects ear canals for Bluetooth earbuds, AirPods, and covert audio devices.</li>
+                    <li><strong>Calibrated Gaze Tracking:</strong> MediaPipe tracking tuned for natural on-screen reading.</li>
+                    <li><strong>5-Warning Policy:</strong> 5 integrity warnings lock the exam, requiring Teacher Code unlock.</li>
                   </ul>
                 </div>
               </div>
             </div>
 
+            {/* Right Column: Camera & Pre-Exam Biometric Scan */}
             <div>
               <label style={{ display: 'block', fontSize: '0.875rem', fontWeight: 600, marginBottom: '6px' }}>
-                Camera & Eye Tracking Self-Check
+                Pre-Exam Face & Earpiece Scan
               </label>
-              <WebcamProctor backendUrl={backendUrl} compact />
-              <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', fontSize: '0.75rem', color: 'var(--color-text-tertiary)' }}>
-                <AlertCircle size={14} />
-                <span>Verify that your eyes are tracked with green indicators.</span>
+
+              {/* Video feed with scanning overlay */}
+              <div
+                style={{
+                  position: 'relative',
+                  width: '100%',
+                  height: '240px',
+                  backgroundColor: '#0F172A',
+                  borderRadius: 'var(--radius-md)',
+                  overflow: 'hidden',
+                  border: isScanPassed ? '2px solid #10B981' : '1px solid var(--color-border)'
+                }}
+              >
+                <video
+                  ref={videoRef}
+                  playsInline
+                  muted
+                  style={{
+                    width: '100%',
+                    height: '100%',
+                    objectFit: 'cover',
+                    transform: 'scaleX(-1)'
+                  }}
+                />
+                <canvas ref={canvasRef} style={{ display: 'none' }} />
+
+                {/* Biometric Scanning Reticle */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '50%',
+                    left: '50%',
+                    transform: 'translate(-50%, -50%)',
+                    width: '140px',
+                    height: '180px',
+                    border: `2px dashed ${isScanPassed ? '#10B981' : 'rgba(79, 70, 229, 0.7)'}`,
+                    borderRadius: '50%',
+                    pointerEvents: 'none',
+                    boxShadow: isScanPassed ? '0 0 15px rgba(16, 185, 129, 0.5)' : 'none'
+                  }}
+                />
+
+                {/* Ear scan guide tags */}
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '45%',
+                    left: '12px',
+                    fontSize: '0.6875rem',
+                    fontWeight: 700,
+                    color: '#94A3B8',
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    padding: '3px 6px',
+                    borderRadius: '4px'
+                  }}
+                >
+                  [Ear Zone]
+                </div>
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: '45%',
+                    right: '12px',
+                    fontSize: '0.6875rem',
+                    fontWeight: 700,
+                    color: '#94A3B8',
+                    backgroundColor: 'rgba(15, 23, 42, 0.85)',
+                    padding: '3px 6px',
+                    borderRadius: '4px'
+                  }}
+                >
+                  [Ear Zone]
+                </div>
+
+                {isScanning && (
+                  <div
+                    style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundColor: 'rgba(15, 23, 42, 0.75)',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#FFFFFF',
+                      gap: '8px'
+                    }}
+                  >
+                    <RefreshCw size={28} className="spin-icon" style={{ animation: 'spin 1s linear infinite' }} />
+                    <span style={{ fontSize: '0.875rem', fontWeight: 600 }}>Analyzing Face Biometrics & Earpieces...</span>
+                  </div>
+                )}
               </div>
+
+              {/* Scan Trigger Button */}
+              <div style={{ marginTop: '10px', display: 'flex', gap: '8px' }}>
+                <button
+                  type="button"
+                  onClick={handlePerformScan}
+                  disabled={isScanning || !cameraActive}
+                  className="btn btn-secondary"
+                  style={{
+                    flex: 1,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: '8px',
+                    padding: '9px 14px',
+                    fontSize: '0.875rem',
+                    fontWeight: 600,
+                    backgroundColor: isScanPassed ? '#F0FDF4' : undefined,
+                    borderColor: isScanPassed ? '#10B981' : undefined,
+                    color: isScanPassed ? '#065F46' : undefined
+                  }}
+                >
+                  {isScanPassed ? <CheckCircle2 size={16} color="#10B981" /> : <Camera size={16} />}
+                  <span>{isScanPassed ? 'Re-scan Biometrics' : 'Scan Face & Check Earpieces'}</span>
+                </button>
+              </div>
+
+              {/* Scan Results Feedback Card */}
+              {scanResult && (
+                <div
+                  style={{
+                    marginTop: '12px',
+                    padding: '12px 14px',
+                    borderRadius: 'var(--radius-md)',
+                    backgroundColor: isScanPassed ? '#F0FDF4' : '#FEF2F2',
+                    border: `1px solid ${isScanPassed ? '#BBF7D0' : '#FECACA'}`,
+                    fontSize: '0.8125rem'
+                  }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 700, color: isScanPassed ? '#065F46' : '#991B1B' }}>
+                    {isScanPassed ? <CheckCircle2 size={16} /> : <AlertTriangle size={16} />}
+                    <span>{isScanPassed ? 'Biometrics & Audio Scan Verified' : 'Scan Flagged Issues'}</span>
+                  </div>
+
+                  <div style={{ marginTop: '6px', display: 'grid', gridTemplateColumns: '1fr', gap: '4px', color: 'var(--color-text-primary)' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <span style={{ fontWeight: 600 }}>Face ID Token:</span>
+                      <code style={{ fontSize: '0.75rem', backgroundColor: '#FFFFFF', padding: '2px 6px', borderRadius: '4px', border: '1px solid var(--color-border)' }}>
+                        {scanResult.face_id}
+                      </code>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Headphones size={14} color={scanResult.earpiece_detected ? '#DC2626' : '#10B981'} />
+                      <span>Earpiece Scan: {scanResult.earpiece_detected ? 'Concealed earpiece detected!' : 'Clear (No earbuds/earpieces)'}</span>
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                      <Eye size={14} color={scanResult.eyewear_detected ? '#DC2626' : '#10B981'} />
+                      <span>Eyewear Check: {scanResult.eyewear_detected ? 'Sunglasses/tinted lenses detected!' : 'Clear (Eyes visible)'}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {scanError && !scanResult && (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '8px', fontSize: '0.75rem', color: '#DC2626' }}>
+                  <AlertCircle size={14} />
+                  <span>{scanError}</span>
+                </div>
+              )}
             </div>
           </div>
 
-          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px', display: 'flex', justifyContent: 'flex-end' }}>
+          <div style={{ borderTop: '1px solid var(--color-border)', paddingTop: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ fontSize: '0.8125rem', color: 'var(--color-text-secondary)' }}>
+              {isScanPassed ? (
+                <span style={{ color: '#059669', fontWeight: 600 }}>✓ Face ID enrolled. Ready to enter exam.</span>
+              ) : (
+                <span>Click &quot;Scan Face &amp; Check Earpieces&quot; before continuing.</span>
+              )}
+            </div>
             <button
               type="submit"
               className="btn btn-primary"
               disabled={isLoading}
               style={{ padding: '12px 28px', fontSize: '1rem', fontWeight: 700 }}
             >
-              <span>Continue to Exam Rules & Guidelines</span>
+              <span>Continue to Exam Rules &amp; Guidelines</span>
               <ArrowRight size={18} />
             </button>
           </div>
